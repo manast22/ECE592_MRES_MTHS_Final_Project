@@ -1,0 +1,8 @@
+# Python 3.9 on artemisia. System site-packages have numpy 1.26.3 / scipy 1.9.3
+# (version-mismatch warning) -> use a venv:
+#   python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+numpy>=1.24,<2
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+ruptures>=1.1     # change-point detection for idle-threshold extraction (Phase 1)

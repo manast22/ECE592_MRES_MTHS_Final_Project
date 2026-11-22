@@ -4,28 +4,102 @@
 > dependency and risk: we front-load the de-risking steps (hardware access) and
 > the universally-available baseline, then extend to the harder off-core work.
 
+## Test platform: `artemisia.ece.ncsu.edu` (surveyed 2026-11-22)
+
+Full snapshot: `env/hostinfo_artemisia_2026-11-22.txt` (regenerate with `make hostinfo`).
+
+### Hardware
+
+| Item | Value |
+|---|---|
+| CPU | 2× **Intel Xeon Gold 5420+** (Sapphire Rapids, family 6 model 143 stepping 8), microcode `0x2b000685` (kernel flags "Old microcode") |
+| Cores | 2 sockets × 28 cores × 2 SMT = 112 logical CPUs; CPUs **60, 68 offline** |
+| NUMA | node0 = CPUs 0-27,56-83 (256 GB); node1 = CPUs 28-55,84-111 (256 GB). SMT sibling of CPU *n* is *n*+56 |
+| Caches | L1d 48 KB/core, L2 2 MB/core, L3 52.5 MB/socket |
+| Memory | 501 GB total; no static hugepages (THP active) |
+| Frequency | Base/TSC **2.0 GHz** (`PLATFORM_INFO` max non-turbo ratio 20); min ratio 8 (800 MHz); turbo ratio limits 27-41 (`MSR 0x1AD = 0x1b1b1b1c1d232629`) |
+| ISA (relevant) | `amx_tile amx_int8 amx_bf16`, `avx512f/bw/dq/vl/vnni/bf16/fp16/ifma/vbmi/vbmi2`, `enqcmd movdir64b movdiri`, `serialize waitpkg`, `constant_tsc nonstop_tsc tsc_known_freq` |
+
+### On-die accelerators (all present and driver-bound)
+
+| Unit | PCI (node0 / node1) | Driver | Config / state |
+|---|---|---|---|
+| **DSA** | `75:01.0` → `dsa0` / `f2:01.0` → `dsa2` | `idxd` | enabled; user WQs: `wq0.0` shared(64), `wq0.1` dedicated(64), `wq2.0` dedicated(64), `wq2.1` shared(64). PASID/SVM on (`intel_iommu=on,sm_on`) |
+| **IAA** | `75:02.0` → `iax1` / `f2:02.0` → `iax3` | `idxd` | enabled; `wq1.1`, `wq3.0` shared(128) |
+| **QAT** (401xx / 4xxx gen) | `76:00.0` / `f3:00.0` (PF) + 16 VFs each | PF `4xxx`, VFs `vfio-pci` | `state=up`, `cfg_services=sym;dc`, **`pm_idle_enabled=1`**; `qatmgr --policy=16` running; qatlib 25.08 (in-tree driver, no `/etc/4xxx_devX.conf`) |
+| **DLB 2.0** | `78:00.0` / `f5:00.0` | `dlb2` (node0 only) | `/dev/dlb0` |
+| idxd PMUs | `perf` PMUs `dsa0 dsa2 iax1 iax3 dlb0` | | can count device events via `perf stat -e dsa0/...` |
+
+### Software / tools available
+- Compilers: gcc 11.5 (`-mamx-tile -mamx-int8` OK), clang 21.1. cmake, make, git.
+- Kernel 6.17.8 (elrepo), RHEL 9.8. AMX requires `arch_prctl(ARCH_REQ_XCOMP_PERM, XTILEDATA)` (verified working in `env/check_amx.c`).
+- Perf/power: `perf` (5.14; `perf_event_paranoid=0`, so CPU-wide counting and `msr/aperf,mperf,tsc/` work), `turbostat` (no-MSR mode as non-root, still reports `Bzy_MHz`/`PkgWatt`), `cpupower`, `pqos` (RDT/CAT: `cat_l3 cat_l2 mba` present), `rdmsr` (**has `cap_sys_rawio`, so reads work as user**), `stress-ng`, `numactl`, `taskset`.
+- RAPL: sysfs `intel-rapl:{0,1}` (package-0/1) + `:0:0` (dram), **world-readable**; perf `power/energy-pkg/`, `energy-ram/`, `energy-psys/`. **No `energy-cores` (PP0) domain on SPR**, so core-only power is not available and we report package deltas.
+- Accelerator libs: `accel-config` 4.1.8 + `libaccel-config` headers, `linux/idxd.h`; qatlib 25.08 + `qatlib-devel` + samples (`cpa_sample_code`, `dc_stateless_sample`, `cipher_sample`, …); QATzip 1.3.1 (`qzip`, `qatzip-test`).
+- Python 3.9.25: numpy 1.26.3, pandas 2.2.0, matplotlib 3.9.4, scipy 1.9.3 (numpy/scipy version warning). `ruptures` not installed, so use a venv (`requirements.txt`).
+
+### Current system settings (as found, not changed by us)
+
+| Setting | Value | Implication |
+|---|---|---|
+| `isolcpus` | `28-55,84-111` (all of socket 1) | Use node-1 cores for probes, **paired with node-1 devices `dsa2`/`iax3`/QAT `f3:00.0`**. Keep SMT sibling (+56) idle |
+| `nohz_full` | not set | Timer tick still fires on test cores; filter outliers |
+| cpufreq | `intel_cpufreq` (intel_pstate **passive**), HWP off, governor `performance`, range 0.8-2.0 GHz | |
+| `no_turbo` | `1` in sysfs, **but turbo is effectively ON**: `PERF_CTL` requests ratio 20, `PERF_STATUS` reports ratio 27, `IA32_MISC_ENABLE[38]=0` | See measured frequencies below |
+| cpuidle | `acpi_idle`, only `POLL` + `C1` exposed (no C6) | Core C6 can't confound AMX gating, which is good; `PKG_CST_CONFIG=0x5` |
+| Other users | shared machine; other users have active sessions; CrashPlan backup (~75% of one node-0 CPU) | Run on isolated node 1; log `verify_env.sh` output with every dataset |
+
+**Measured effective core frequency under sustained load on CPU 30** (`env/verify_env.sh`, APERF/MPERF × TSC):
+
+| Instruction class | Effective freq | vs. TSC (2.0 GHz) |
+|---|---|---|
+| scalar | 2.70 GHz | +35% |
+| AVX-512 FMA | 2.70 GHz | +35% |
+| AMX `TDPBSSD` | **2.50 GHz** | +25% |
+
+The **frequency license differs for AMX**. So until turbo is really disabled,
+TSC-measured latencies mix gating with DVFS (the Hertzbleed confounder). Fix:
+root runs `env/setup_env.sh` (sets `IA32_MISC_ENABLE[38]` and min=max=2.0 GHz).
+Fallback without root: record `aperf/mperf` alongside every sample and report
+latency in *core* cycles as well as TSC ticks.
+
+### Access status for our account (non-root, no sudo)
+
+| Resource | Status | Needed for | Ask admin for |
+|---|---|---|---|
+| AMX / AVX-512 | ✅ works | Phases 1-2 | none |
+| RAPL (sysfs + perf) | ✅ readable | Phase 2 | none |
+| `rdmsr` | ✅ (file caps) | freq/turbo checks | none |
+| `wrmsr`, cpufreq writes, `cpupower` set | ❌ | real turbo-off + P-state pin | run `env/setup_env.sh` once per boot, or sudoers rule |
+| `/dev/dsa/*`, `/dev/iax/*` | ❌ (`dsausers` group + per-user ACL) | Phase 3 DSA/IAA | add us to **`dsausers`** |
+| QAT VFs `/dev/vfio/281-312` | ❌ (`qat` group) | Phase 3 QAT | add us to **`qat`** |
+| QAT `pm_status` (`/sys/kernel/debug`, mode 0700) | ❌ | QAT ground truth | sudoers rule for a read-only `pm_status` logger, or debugfs read access |
+| `/dev/dlb0` | ❌ (per-user ACL) | optional | ACL entry (low priority) |
+
 ## Phase 0 — Environment & de-risking (do first, week 1)
 
 Goal: confirm what hardware we can actually measure before writing analysis code.
 
-- [ ] Identify test machine(s): CPU generation, Xeon SKU, which accelerators are
-      enabled. Record in `env/hostinfo.txt`.
-- [ ] Confirm AMX present: `cat /proc/cpuinfo | grep -o 'amx[a-z_]*'`.
-- [ ] Check off-core availability:
-  - DSA: `accel-config list` (needs `idxd` driver). Is a device + WQ present?
-  - QAT: `lspci | grep -i qat`; is `qat_4xxx` driver loaded; does
-        `/sys/kernel/debug/qat_4xxx_*/pm_status` exist?
-  - DLB: `lspci | grep -i 2710` / `libdlb` present?
-- [ ] Decide off-core target: **QAT** if `pm_status` is available (ground truth),
-      else **DSA** (availability). Record the decision and why.
-- [ ] Lock down measurement environment (script `env/setup_env.sh`):
-  - Pin core(s): `isolcpus`, `nohz_full` on the test core.
-  - Disable turbo; fix P-state: `cpupower frequency-set -g performance` + set
-    min=max freq.
-  - Restrict C-states on the test core (`cpupower idle-set` / kernel param).
-  - Confirm with `turbostat` that frequency is actually pinned under load.
+- [x] Identify test machine(s): CPU generation, Xeon SKU, which accelerators are
+      enabled. Recorded in `env/hostinfo_artemisia_2026-11-22.txt` (see "Test platform" above).
+- [x] Confirm AMX present **and executable** (`build/check_amx` → `TDPBSSD` result correct).
+- [x] Check off-core availability: DSA ✅, IAA ✅, QAT ✅ (`pm_idle_enabled=1`),
+      DLB ✅, all present and bound. **Blocked only on permissions** (table above).
+- [ ] Get access: request `dsausers` + `qat` group membership and a `pm_status`
+      read path from the admin.
+- [ ] Decide off-core target. *Provisional:* **QAT** (hardware + PM present;
+      `pm_status` gives ground truth) once `qat` group + `pm_status` access is
+      granted; **DSA** as fallback (only needs `dsausers`; simpler descriptor
+      path, perf PMU available). Record the final decision here.
+- [ ] Lock down measurement environment (`env/setup_env.sh`, **needs root**):
+  - [x] Core isolation: `isolcpus=28-55,84-111` already set. `nohz_full` not set (kernel param, admin).
+  - [ ] Really disable turbo (`IA32_MISC_ENABLE[38]`) and pin min=max=2.0 GHz.
+  - [x] C-states: only POLL/C1 exposed by `acpi_idle`, so nothing deeper to restrict.
+  - [ ] Confirm with `env/verify_env.sh <cpu>` → all classes within 2% of TSC
+        (**currently FAILS**: 2.7 / 2.7 / 2.5 GHz).
 
-**Deliverable:** `env/` dir with host info + a reproducible setup script. If no
+**Deliverable:** `env/` dir with host info, a reproducible setup script, and a
+pre-flight verification script. If no
 off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
 
 ## Phase 1 — Baseline + AMX replication (on-core)
@@ -158,21 +232,38 @@ Phase 0 (env + hardware) ─┬─> Phase 1 (AMX ladder + thresholds) ─> Phase
 
 ```
 .
-├── BACKGROUND.md
-├── PLAN.md
-├── env/            # host info, setup/pinning scripts
-├── bench/          # probes, timers, power samplers
-├── attack/         # covert-channel sender/receiver (Phase 4)
-├── data/           # raw CSVs, by phase
-└── analysis/       # plotting + stats scripts, figures
+├── BACKGROUND.md / PLAN.md / README.md
+├── Makefile             # builds bench/ attack/ env/ *.c → build/; `make verify`, `make hostinfo`
+├── requirements.txt     # Python analysis deps (use a venv)
+├── env/                 # collect_hostinfo.sh, verify_env.sh, setup_env.sh (root),
+│                        # check_amx.c, freq_probe.c, hostinfo_<host>_<date>.txt
+├── bench/               # probes, timers, power samplers
+│   └── common/          # shared headers (timer.h, pinning helpers)
+├── attack/              # covert-channel sender/receiver (Phase 4)
+├── scripts/             # multi-step run orchestration (campaigns)
+├── data/
+│   ├── raw/phase{1..5}/        # untouched probe output + *.meta.txt
+│   └── processed/phase{1..5}/  # cleaned / aggregated
+├── analysis/
+│   ├── processing/      # thresholds, state clustering, power join, FoM
+│   └── plotting/        # figure generation only
+├── figures/             # generated plots
+├── results/             # summary tables for the write-up
+├── docs/                # notes, write-up drafts
+└── build/               # binaries (git-ignored)
 ```
+
+Data paths in the phases above (`data/phaseN/`) map to `data/raw/phaseN/` for
+probe output and `data/processed/phaseN/` for analysis output.
 
 ## Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
 | No off-core hardware | Phases 1–2 (AMX) stand alone as a full project |
-| Frequency scaling masquerades as gating | Pin freq, disable turbo, verify with `turbostat` before trusting any result |
+| Frequency scaling masquerades as gating | **Observed on artemisia**: sysfs `no_turbo=1` but cores run 2.5-2.7 GHz with an AMX-specific license. Root runs `setup_env.sh`; gate every run on `verify_env.sh`; log APERF/MPERF per sample as a fallback |
+| No root / device-group access | Phases 1-2 need none. Request `dsausers`, `qat`, and a `pm_status` read path early (week 1) |
+| Shared machine noise (other users, backup agent) | Use isolated node-1 cores + node-1 devices; idle SMT sibling; record `verify_env.sh` with each dataset; many repeats + robust stats |
 | Off-core wake signal lost in async noise | Use QAT `pm_status` as ground truth; decompose steady-state floor from first-after-idle |
 | QAT not in a dedicated RAPL domain | Document exactly what the measured power domain covers; use relative deltas |
 | Scope creep into "reading leftover data" | Keep Phase 5 as a residency-reset question, framed honestly |
