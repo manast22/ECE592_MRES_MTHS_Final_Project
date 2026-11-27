@@ -1,0 +1,10 @@
+cpu=10 sibling=10,66 numa=node0
+isolated=28-55,84-111 nohz_full=(null)
+governor=performance min=2000000 max=2000000 no_turbo=0
+cstates: POLL(dis=0) C1(dis=0) 
+user tasks currently on cpu10: sudo 
+tsc_mhz~2000
+scalar  effective= 2000 MHz  dev=  0.0%  OK
+avx512  effective= 2000 MHz  dev=  0.0%  OK
+amx     effective= 2000 MHz  dev=  0.0%  OK
+PASS: frequency pinned to TSC

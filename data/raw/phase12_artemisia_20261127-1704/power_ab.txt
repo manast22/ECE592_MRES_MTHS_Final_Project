@@ -1,0 +1,13 @@
+null n=15 A=none:0:1 B=none:0:1 | A 114.25 W  B 116.57 W | A-B -2.324 +- 0.687 W (95%, 39 blocks) = -0.155 W/core | ops/s/core A 3.32e+07 B 3.32e+07
+amx_sat n=15 A=dpbssd:0:64 B=none:0:1 | A 119.29 W  B 116.26 W | A-B 3.032 +- 0.746 W (95%, 39 blocks) = 0.202 W/core | ops/s/core A 1.2e+08 B 3.32e+07
+amx_300ns n=15 A=dpbssd:300:1 B=none:300:1 | A 119.60 W  B 114.94 W | A-B 4.657 +- 0.834 W (95%, 39 blocks) = 0.310 W/core | ops/s/core A 3.14e+06 B 3.14e+06
+amx_1us n=15 A=dpbssd:1000:1 B=none:1000:1 | A 118.79 W  B 113.81 W | A-B 4.982 +- 0.781 W (95%, 39 blocks) = 0.332 W/core | ops/s/core A 9.69e+05 B 9.64e+05
+amx_20us n=15 A=dpbssd:20000:1 B=none:20000:1 | A 118.17 W  B 113.55 W | A-B 4.619 +- 0.748 W (95%, 39 blocks) = 0.308 W/core | ops/s/core A 4.99e+04 B 4.99e+04
+amx_1ms n=15 A=dpbssd:1000000:1 B=none:1000000:1 | A 114.85 W  B 114.54 W | A-B 0.306 +- 0.931 W (95%, 39 blocks) = 0.020 W/core | ops/s/core A 1e+03 B 1e+03
+amx_20us_vs_300ns n=15 A=dpbssd:20000:1 B=dpbssd:300:1 | A 118.90 W  B 120.58 W | A-B -1.686 +- 1.147 W (95%, 39 blocks) = -0.112 W/core | ops/s/core A 4.99e+04 B 3.14e+06
+avx512_sat n=15 A=fma512:0:8 B=none:0:1 | A 122.98 W  B 118.15 W | A-B 4.831 +- 0.981 W (95%, 39 blocks) = 0.322 W/core | ops/s/core A 5.35e+07 B 3.32e+07
+avx256_sat n=15 A=fma256:0:8 B=none:0:1 | A 119.21 W  B 117.14 W | A-B 2.075 +- 0.861 W (95%, 39 blocks) = 0.138 W/core | ops/s/core A 5.54e+07 B 3.32e+07
+avx512_20us n=15 A=fma512:20000:1 B=none:20000:1 | A 118.44 W  B 114.15 W | A-B 4.290 +- 0.718 W (95%, 39 blocks) = 0.286 W/core | ops/s/core A 4.99e+04 B 4.99e+04
+amx_sat_n1 n=1 A=dpbssd:0:64 B=none:0:1 | A 104.87 W  B 102.60 W | A-B 2.271 +- 0.859 W (95%, 39 blocks) = 2.271 W/core | ops/s/core A 1.2e+08 B 3.3e+07
+amx_sat_n4 n=4 A=dpbssd:0:64 B=none:0:1 | A 108.11 W  B 105.75 W | A-B 2.365 +- 1.202 W (95%, 39 blocks) = 0.591 W/core | ops/s/core A 1.2e+08 B 3.32e+07
+amx_sat_n8 n=8 A=dpbssd:0:64 B=none:0:1 | A 112.15 W  B 110.58 W | A-B 1.571 +- 0.858 W (95%, 39 blocks) = 0.196 W/core | ops/s/core A 1.2e+08 B 3.32e+07

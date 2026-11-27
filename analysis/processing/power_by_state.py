@@ -20,9 +20,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 from common import read_csv  # noqa: E402
 
 
-def blocks(pw, skip):
+def blocks(pw, st, skip):
+    """Per 4-window block: (sum A - sum B) / 2. Works for fixed ABBA (slot 3)
+    and for the random ABBA/BAAB order (power_ab after slot 3)."""
     k0 = (skip + 3) // 4 * 4
-    return np.array([(pw[k] + pw[k + 3] - pw[k + 1] - pw[k + 2]) / 2 for k in range(k0, len(pw) - 3, 4)])
+    sgn = np.where(st == "A", 1.0, -1.0)
+    return np.array([(sgn[k:k + 4] * pw[k:k + 4]).sum() / 2 for k in range(k0, len(pw) - 3, 4)])
 
 
 def main():
@@ -40,7 +43,7 @@ def main():
         win = t["win"][m].astype(int); o = np.argsort(win)
         pw = t["pkg_w"][m][o]; st = t["state"][m][o]
         n = int(t["n_cores"][m][0]); A = t["a"][m][0]; B = t["b"][m][0]
-        d = blocks(pw, a.skip)
+        d = blocks(pw, st, a.skip)
         mu = d.mean() if len(d) else np.nan
         ci = 1.96 * d.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else np.nan
         keep = np.arange(len(pw)) >= a.skip

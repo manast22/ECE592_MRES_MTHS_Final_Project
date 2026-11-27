@@ -5,8 +5,14 @@
 // hold_state could not tell any state apart). This probe fixes both:
 //   * N worker threads (one per physical core in `cpus`) run the SAME state
 //     at once, so the signal is N x the per-core difference;
-//   * states alternate in short windows in an ABBA pattern, and the result is
-//     the mean of paired (A - B) differences, so slow drift cancels.
+//   * states alternate in 4-window blocks, each block randomly ABBA or BAAB,
+//     and the result is the mean of per-block (A - B) differences, so slow
+//     drift cancels and periodic interference cannot alias onto the pattern.
+// Slot 3 lesson: artemisia has a ~2.7 W package-power pulse at exactly 1 Hz
+// (another tenant, locked to the wall-clock second). A fixed ABBA pattern
+// with 250 ms windows repeats every 1 s and turned it into a +-2.5 W bias
+// (null test failed). Default windows are now 1 s, which integrate one full
+// period, and the block order is random.
 // Workers follow a shared TSC schedule (TSC is synchronous across cores).
 // The main thread reads RAPL package/DRAM energy at every window boundary.
 // The first `skip` windows (settling) are excluded from the summary.
@@ -15,11 +21,12 @@
 // dpbssd:20000:1 (AMX held in the ~5.7k gated state), none:0:1 (scalar spin).
 //
 // Usage: build/power_ab [key=val ...] >> out.csv
-//   cpus=2-9,11-17  a=dpbssd:0:64  b=none:0:1  win_ms=250  windows=200
-//   skip=4  main=10 (CPU for the RAPL reader)  pkg=auto (from first cpu)
+//   cpus=2-9,11-17  a=dpbssd:0:64  b=none:0:1  win_ms=1000  windows=64
+//   skip=4 (whole blocks)  seed=time  main=10 (CPU for the RAPL reader)
+//   pkg=auto (from first cpu)
 //   label=   free text copied into the CSV     header=0|1
 // CSV (one row per window):
-//   label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w
+//   label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w,t_ns   (t_ns = wall clock at window start)
 // stderr: mean A, mean B, paired diff A-B with 95% CI, per-core diff.
 #define _GNU_SOURCE
 #include "timer.h"
@@ -61,8 +68,9 @@ static inline __attribute__((always_inline)) void do_op(int op) {
     else if (op == OP_F256) __asm__ volatile(ZERO10 ".rept 8\n" FMA8("ymm") ".endr\n" ::: CLOB);
 }
 
-// ABBA ABBA ...: window w runs A when (w % 4 == 0 || w % 4 == 3)
-static inline int is_a(uint64_t w) { uint64_t m = w & 3; return m == 0 || m == 3; }
+// SCHED[w] = 1 when window w runs state A (blocks of 4: ABBA or BAAB at random)
+static uint8_t *SCHED;
+static inline int is_a(uint64_t w) { return SCHED[w]; }
 
 static state_t SA, SB;
 static uint64_t T0, WT, NW;              // schedule start, window ticks, windows
@@ -118,8 +126,10 @@ static int parse_cpus(const char *s, int *out, int max) {
 
 int main(int argc, char **argv) {
     int cpus[256], nc = parse_cpus(kv(argc, argv, "cpus", "2-9,11-17"), cpus, 256);
-    double win_ms = atof(kv(argc, argv, "win_ms", "250"));
-    int windows = atoi(kv(argc, argv, "windows", "200"));
+    double win_ms = atof(kv(argc, argv, "win_ms", "1000"));
+    int windows = atoi(kv(argc, argv, "windows", "64"));
+    unsigned seed = (unsigned)atol(kv(argc, argv, "seed", "0"));
+    if (!seed) seed = (unsigned)time(NULL);
     int skip = atoi(kv(argc, argv, "skip", "4"));
     int mainc = atoi(kv(argc, argv, "main", "10"));
     int header = atoi(kv(argc, argv, "header", "0"));
@@ -151,12 +161,21 @@ int main(int argc, char **argv) {
     parse_state(kv(argc, argv, "a", "dpbssd:0:64"), &SA, mhz);
     parse_state(kv(argc, argv, "b", "none:0:1"), &SB, mhz);
     WT = (uint64_t)(win_ms * mhz * 1e3); NW = windows;
+    SCHED = malloc(NW + 4);
+    srand(seed);
+    for (uint64_t k = 0; k < NW; k += 4) {
+        int abba = rand() & 1;
+        for (uint64_t j = 0; j < 4 && k + j < NW; j++)
+            SCHED[k + j] = abba ? (j == 0 || j == 3) : (j == 1 || j == 2);
+    }
     T0 = UINT64_MAX;
 
     pthread_t th[256]; warg_t wa[256];
     for (int i = 0; i < nc; i++) { wa[i].cpu = cpus[i]; pthread_create(&th[i], NULL, worker, &wa[i]); }
     while (__atomic_load_n(&g_ready, __ATOMIC_SEQ_CST) < nc) usleep(1000);
     uint64_t t0 = __rdtsc() + (uint64_t)(0.05 * mhz * 1e6);   // start 50 ms from now
+    struct timespec rts; clock_gettime(CLOCK_REALTIME, &rts);
+    double real0 = rts.tv_sec * 1e9 + rts.tv_nsec + (double)(t0 - __rdtsc()) * 1e3 / mhz;
     __atomic_store_n(&T0, t0, __ATOMIC_SEQ_CST);
 
     uint64_t *pe_v = malloc(8 * (NW + 1)), *de_v = malloc(8 * (NW + 1)), *tt = malloc(8 * (NW + 1));
@@ -169,7 +188,7 @@ int main(int argc, char **argv) {
     }
     for (int i = 0; i < nc; i++) pthread_join(th[i], NULL);
 
-    if (header) printf("label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w\n");
+    if (header) printf("label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w,t_ns\n");
     double sa = 0, sb = 0; int na = 0, nb = 0;
     double *pw = malloc(sizeof(double) * NW);
     for (uint64_t w = 0; w < NW; w++) {
@@ -177,21 +196,23 @@ int main(int argc, char **argv) {
         pw[w] = e_diff(pe_v[w], pe_v[w + 1], pmax) / 1e6 / dt;
         double dw = dz[0] ? e_diff(de_v[w], de_v[w + 1], dmax) / 1e6 / dt : 0;
         int a = is_a(w);
-        printf("%s,%d,%s,%s,%lu,%s,%.4f,%.3f,%.3f\n", label, nc, SA.name, SB.name, w, a ? "A" : "B", dt, pw[w], dw);
+        printf("%s,%d,%s,%s,%lu,%s,%.4f,%.3f,%.3f,%.0f\n", label, nc, SA.name, SB.name, w, a ? "A" : "B", dt, pw[w], dw,
+               real0 + (double)(tt[w] - t0) * 1e3 / mhz);
         if ((int)w < skip) continue;
         if (a) { sa += pw[w]; na++; } else { sb += pw[w]; nb++; }
     }
-    // paired differences over ABBA blocks: (A0 + A3 - B1 - B2) / 2 per block
+    // paired differences per 4-window block: (sum A - sum B) / 2
     double s = 0, s2 = 0; int nbk = 0;
     for (uint64_t k = (skip + 3) / 4 * 4; k + 3 < NW; k += 4) {
-        double d = (pw[k] + pw[k + 3] - pw[k + 1] - pw[k + 2]) / 2;
-        s += d; s2 += d * d; nbk++;
+        double d = 0;
+        for (int j = 0; j < 4; j++) d += SCHED[k + j] ? pw[k + j] : -pw[k + j];
+        d /= 2; s += d; s2 += d * d; nbk++;
     }
     double m = nbk ? s / nbk : 0, sd = nbk > 1 ? sqrt((s2 - nbk * m * m) / (nbk - 1)) : 0;
     double ci = nbk > 1 ? 1.96 * sd / sqrt(nbk) : 0;
     double secs_a = (double)WT * (NW / 2) / (mhz * 1e6), secs_b = secs_a;   // ABBA: half the windows each
-    fprintf(stderr, "%s n=%d A=%s B=%s | A %.2f W  B %.2f W | A-B %.3f +- %.3f W (95%%, %d blocks) = %.3f W/core | ops/s/core A %.3g B %.3g\n",
-            label, nc, SA.name, SB.name, na ? sa / na : 0, nb ? sb / nb : 0, m, ci, nbk, m / nc,
+    fprintf(stderr, "%s n=%d seed=%u A=%s B=%s | A %.2f W  B %.2f W | A-B %.3f +- %.3f W (95%%, %d blocks) = %.3f W/core | ops/s/core A %.3g B %.3g\n",
+            label, nc, seed, SA.name, SB.name, na ? sa / na : 0, nb ? sb / nb : 0, m, ci, nbk, m / nc,
             g_ops[0] / secs_a / nc, g_ops[1] / secs_b / nc);
     fflush(stdout);
     return 0;

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Turbo-off slot 3: fill the Phase-1 gaps and redo Phase 2 with the A/B probe.
-# Run AFTER `sudo env/setup_env.sh` (this script needs no root). ~19 min.
-# Usage: scripts/run_phase12.sh [cpu=10] [quick]   (quick = smoke test, ~3 min)
+# Run AFTER `sudo env/setup_env.sh` (this script needs no root). ~24 min (p2 only: ~16 min).
+# Usage: scripts/run_phase12.sh [cpu=10] [quick|p2]   (quick = smoke test ~3 min, p2 = Phase 2 only)
 #
 # Phase 1 (cpu, default 10):
 #   P1a AVX width controls  fma512/fma256/fma128/none, 100 us warm-up
@@ -19,10 +19,10 @@ CPU=${1:-10}; QUICK=${2:-}
 ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
 make -s all || { echo "build failed" >&2; exit 1; }
 
-AT=50; LT=4; LS=6; VT=200; CT=100; WIN=160      # trials / windows
-[ "$QUICK" = quick ] && { AT=3; LT=1; LS=1; VT=10; CT=5; WIN=16; }
+AT=50; LT=4; LS=6; VT=200; CT=100; WIN=64       # trials / 1-s power windows
+[ "$QUICK" = quick ] && { AT=3; LT=1; LS=1; VT=10; CT=5; WIN=8; }
 NBR=12-15; CPU2=12; PCPUS=2-9,11-17               # neighbour cores, 2nd core, power cores
-OUT=data/raw/phase12_$(hostname -s)_$(date +%Y%m%d-%H%M)${QUICK:+_quick}
+OUT=data/raw/phase12_$(hostname -s)_$(date +%Y%m%d-%H%M)${QUICK:+_$QUICK}
 mkdir -p "$OUT"
 T="taskset -c $CPU"
 log() { echo "== $(date +%T) $*" | tee -a "$OUT/run.log"; }
@@ -36,6 +36,7 @@ env/verify_env.sh "$CPU" 2>&1 | tee "$OUT/verify_start.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || log "WARNING: frequency NOT pinned (turbo on?). Data saved but confounded by DVFS."
 $T build/check_amx > "$OUT/check_amx.txt" 2>&1
 
+if [ "$QUICK" != p2 ]; then   # ===== Phase 1 (skipped in p2 mode) =====
 bench/sys_logger.sh "$CPU" 1 > "$OUT/sys.csv" & LOGPID=$!
 trap 'kill $LOGPID 2>/dev/null' EXIT
 
@@ -92,13 +93,14 @@ for op in fma512 fma256; do
   taskset -c $CPU2 build/avx512_probe cpu=$CPU2 trials=$CT op=$op warm_us=100 > "$OUT/cpu${CPU2}_avx_${op}.csv" 2> "$OUT/cpu${CPU2}_avx_${op}.txt"
 done
 kill $LOGPID 2>/dev/null; trap - EXIT
+fi   # ===== end Phase 1 =====
 
 # ---------- Phase 2: power_ab ----------
 P="$OUT/power_ab.csv"; S="$OUT/power_ab.txt"; : > "$S"
-echo "label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w" > "$P"
+echo "label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w,t_ns" > "$P"
 pab() {  # label cpus a b
-  log "P2 power_ab $1: A=$3 B=$4 cpus=$2 (windows=$WIN x 250 ms)"
-  build/power_ab label="$1" cpus="$2" a="$3" b="$4" win_ms=250 windows=$WIN main=$CPU >> "$P" 2>> "$S"
+  log "P2 power_ab $1: A=$3 B=$4 cpus=$2 (windows=$WIN x 1 s)"
+  build/power_ab label="$1" cpus="$2" a="$3" b="$4" win_ms=1000 windows=$WIN main=$CPU >> "$P" 2>> "$S"
   tail -1 "$S"
 }
 pab null        $PCPUS none:0:1          none:0:1

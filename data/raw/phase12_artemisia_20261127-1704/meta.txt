@@ -1,0 +1,21 @@
+Fri Nov 27 05:04:20 PM EST 2026
+6.17.8-1.el9.elrepo.x86_64
+cpu=10 sib=66 nbr=12-15 cpu2=12 power_cpus=2-9,11-17 quick=no
+cpus=0-27,56-59,61-67,69-83 turbo_disabled_bit: set=54 clear=0 | cpu0 min=2000000 max=2000000 gov=performance | global no_turbo=0 (not touched)
+78b2db90001bc5590b8af24deb5cd001  bench/amx_probe.c
+6e955afafc8c19a4177268114aaeb483  bench/avx512_probe.c
+55cf7f40ad72cac95e7e1900b097d47f  bench/hold_state.c
+297a389258ae4a465da22f857a66c7bc  bench/license_timeline.c
+c0b9cbac7d01acffb62aaea06d3f9e8e  bench/power_ab.c
+5a44d08df0071403a6176770a6a0cf1c  bench/timer_test.c
+de9df5b464d02bb86aab9579c1aed55c  bench/common/amx.h
+e26d955452aa0587af260625b529f4ba  bench/common/args.h
+5cb2aaed14def622a2037416e79f0d3f  bench/common/timer.h
+fbf846bc5a877bcc633041e289c74281  bench/power_sampler.sh
+ee4188a0759be88e492d2311d76f7a27  bench/sys_logger.sh
+c428a74285ad6df3e06bc9b122c4a91a  env/auto_restore.sh
+e0c7f34045114f55eb707cd3b2ec0c89  env/collect_hostinfo.sh
+d4ba99322950bfac69e70ffeabb86c78  env/setup_env.sh
+2f862f361f9d6a676507b953c1f5f29e  env/verify_env.sh
+ef5320bd0dea60c118436adae90dd694  scripts/run_phase12.sh
+f88c64da38407594abe4ffd65d2f0990  scripts/run_slot.sh

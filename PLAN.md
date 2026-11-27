@@ -114,10 +114,14 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
       interval Δ → one `TDPBSSD` → record cycles. Sweep Δ from ~100 ns to ~10 ms,
       log-spaced, many repeats per Δ.
 - [x] `scripts/run_slot.sh` (slots 1-2), `scripts/run_phase12.sh` (slot 3: gaps below) — drive the sweeps, write raw CSV.
-- [ ] Slot 3 gaps (`scripts/run_phase12.sh`): ~20k state (sleep idle, TILERELEASE,
+- [x] Slot 3 gaps (`scripts/run_phase12.sh`): ~20k state (sleep idle, TILERELEASE,
       long sweeps), what decides the 5.7k vs 9.4k deep state (sibling / neighbour
       load + `bench/sys_logger.sh`), fine grids at each threshold, fma128 control,
-      second core.
+      second core. → `docs/notes/2026-11-27_turbo_off_slot3.md`
+- **Status:** ladder 135/682/7.7k/5.7k reproduced on 2 cores, thresholds
+  extracted (316–365 ns, 1.78–3.16 µs, 3.16–5.6 µs); AVX gating is >128-bit
+  only. Open: 9.4k state seen only in slot 1 (cause unknown); no ~20k state;
+  policy adapts to usage density and to halt vs. spin (new 3.3k level).
 
 ### Data to collect → `data/phase1/`
 - `amx_latency_vs_delta.csv`: columns `delta_ns, trial, cycles`.
@@ -144,7 +148,10 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
       **Slots 1-2: no signal** (1 core vs. +-1 W socket drift).
 - [x] `bench/power_ab.c` — fix: N cores in the same state, ABBA-alternating
       windows, paired A-B differences + null test; core-count scaling.
-- [ ] Run it (slot 3).
+- [x] Slot 3 run: **null test failed** (−2.3 ± 0.7 W) — a 1 Hz, 2.7 W pulse
+      from another tenant aliased onto the 1 s ABBA period. Fixed: 1 s windows
+      + random ABBA/BAAB order (2-core null after fix: 0.16 ± 0.61 W).
+- [ ] Rerun Phase 2 only: `scripts/run_phase12.sh 10 p2` (~16 min).
 
 ### Data to collect → `data/phase2/`
 - `amx_power_by_state.csv`: `state, pkg_watts, core_watts, ops_per_s`.
