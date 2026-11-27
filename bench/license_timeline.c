@@ -3,10 +3,12 @@
 // block, then sample (TSC, core cycles) back-to-back for WINDOW_US. A gap
 // where core cycles stop advancing while TSC does = core halted.
 //
-// Usage: taskset -c <cpu> build/license_timeline [cpu=45] [reps=50] [op=fma512|fma256|none] [idle_us=2000]
+// Usage: taskset -c <cpu> build/license_timeline [cpu=45] [reps=50] [op=fma512|fma256|amx|none] [idle_us=2000]
+//   (amx = one TDPBSSD as the burst)
 // stdout: per rep, halts as  rep,start_ns,dur_ns  (relative to end of burst)
 // stderr: summary (count, median start, median duration, total halted per rep)
 #include "timer.h"
+#include "amx.h"
 
 #define WINDOW_US 40
 #define MAXS 400000
@@ -32,6 +34,7 @@ int main(int argc, char **argv) {
     double idle_us = argc > 4 ? atof(argv[4]) : 2000;
     pin_cpu(cpu);
     cyc_t c; cyc_open(&c);
+    if (!strcmp(op, "amx")) amx_init();
     double mhz = tsc_mhz();
     uint64_t win = (uint64_t)(WINDOW_US * mhz), idle = (uint64_t)(idle_us * mhz);
     double ns_per_tick = 1e3 / mhz;
@@ -48,6 +51,7 @@ int main(int argc, char **argv) {
         spin_tsc(idle);
         if (!strcmp(op, "fma512"))      __asm__ volatile(ZERO10 ".rept 8\n" FMA8("zmm") ".endr\n" ::: CLOB);
         else if (!strcmp(op, "fma256")) __asm__ volatile(ZERO10 ".rept 8\n" FMA8("ymm") ".endr\n" ::: CLOB);
+        else if (!strcmp(op, "amx"))    _tile_dpbssd(0, 1, 2);
         stamp_t s = stamp(&c);
         size_t n = 0;
         st[n] = s.tsc; sc[n] = s.cyc; n++;
