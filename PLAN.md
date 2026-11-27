@@ -93,10 +93,11 @@ Goal: confirm what hardware we can actually measure before writing analysis code
       path, perf PMU available). Record the final decision here.
 - [ ] Lock down measurement environment (`env/setup_env.sh`, **needs root**):
   - [x] Core isolation: `isolcpus=28-55,84-111` already set. `nohz_full` not set (kernel param, admin).
-  - [ ] Really disable turbo (`IA32_MISC_ENABLE[38]`) and pin min=max=2.0 GHz.
+  - [x] Really disable turbo (`IA32_MISC_ENABLE[38]`) and pin min=max=2.0 GHz
+        (`env/setup_env.sh`, socket 0; `env/auto_restore.sh` timer restores).
   - [x] C-states: only POLL/C1 exposed by `acpi_idle`, so nothing deeper to restrict.
-  - [ ] Confirm with `env/verify_env.sh <cpu>` → all classes within 2% of TSC
-        (**currently FAILS**: 2.7 / 2.7 / 2.5 GHz).
+  - [x] Confirm with `env/verify_env.sh <cpu>` → all classes within 2% of TSC
+        (PASS at 2000 MHz in turbo-off slots 1-2, 2026-11-27).
 
 **Deliverable:** `env/` dir with host info, a reproducible setup script, and a
 pre-flight verification script. If no
@@ -105,24 +106,28 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
 ## Phase 1 — Baseline + AMX replication (on-core)
 
 ### Scripts / benchmarks
-- [ ] `bench/timer.h` — serialized cycle timer (`LFENCE; RDTSC; <op>; LFENCE;
+- [x] `bench/common/timer.h` — serialized cycle timer (`LFENCE; RDTSC; <op>; LFENCE;
       RDTSC`). Note SPR TSC tick ≈ 0.5 ns; record TSC frequency.
-- [ ] `bench/avx512_probe.c` — baseline: time one FMA after a controlled idle
+- [x] `bench/avx512_probe.c` — baseline: time one FMA after a controlled idle
       interval. Cheap, runs anywhere; validates the whole timing harness.
-- [ ] `bench/amx_probe.c` — `LDTILECFG` once, then loop: busy-wait/sleep for
+- [x] `bench/amx_probe.c` — `LDTILECFG` once, then loop: busy-wait/sleep for
       interval Δ → one `TDPBSSD` → record cycles. Sweep Δ from ~100 ns to ~10 ms,
       log-spaced, many repeats per Δ.
-- [ ] `bench/run_reuse_sweep.sh` — drives the sweep, writes raw CSV.
+- [x] `scripts/run_slot.sh` (slots 1-2), `scripts/run_phase12.sh` (slot 3: gaps below) — drive the sweeps, write raw CSV.
+- [ ] Slot 3 gaps (`scripts/run_phase12.sh`): ~20k state (sleep idle, TILERELEASE,
+      long sweeps), what decides the 5.7k vs 9.4k deep state (sibling / neighbour
+      load + `bench/sys_logger.sh`), fine grids at each threshold, fma128 control,
+      second core.
 
 ### Data to collect → `data/phase1/`
 - `amx_latency_vs_delta.csv`: columns `delta_ns, trial, cycles`.
 - `avx512_latency_vs_delta.csv`: same schema.
 
 ### Analysis → `analysis/`
-- [ ] `plot_state_ladder.py`: latency vs. Δ, log-x. **Replicate** the 5-state
+- [x] `analysis/plotting/plot_state_ladder.py`: latency vs. Δ, log-x. **Replicate** the 5-state
       AMX ladder (~50/600/6k/9k/20k cycles). Confirm AVX-512 shows a much
       smaller (~150-cycle) penalty.
-- [ ] `find_thresholds.py`: detect the Δ values where latency jumps between
+- [x] `analysis/processing/find_thresholds.py`: detect the Δ values where latency jumps between
       states (step/change-point detection). **This is the novel extension —
       the idle-timeout thresholds GateBleed did not publish.**
 
@@ -131,11 +136,15 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
 ## Phase 2 — Power characterization (on-core)
 
 ### Scripts / benchmarks
-- [ ] `bench/power_sampler.sh` — read RAPL
+- [x] `bench/power_sampler.sh` — read RAPL
       (`perf stat -e power/energy-pkg/,power/energy-cores/ ...` or
       `/sys/class/powercap/intel-rapl/.../energy_uj`) at fixed sample rate.
-- [ ] `bench/hold_state.c` — drive the unit so it sits in a chosen power state
+- [x] `bench/hold_state.c` — drive the unit so it sits in a chosen power state
       (fixed reuse distance), sustained for N seconds while power is sampled.
+      **Slots 1-2: no signal** (1 core vs. +-1 W socket drift).
+- [x] `bench/power_ab.c` — fix: N cores in the same state, ABBA-alternating
+      windows, paired A-B differences + null test; core-count scaling.
+- [ ] Run it (slot 3).
 
 ### Data to collect → `data/phase2/`
 - `amx_power_by_state.csv`: `state, pkg_watts, core_watts, ops_per_s`.

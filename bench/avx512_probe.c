@@ -10,13 +10,15 @@
 //
 // Usage: taskset -c <cpu> build/avx512_probe [key=val ...] > out.csv
 //   cpu=45  trials=200
-//   op=fma512|fma256|none   timed block (fma256 = control without upper lanes,
-//                           none = empty region, harness control)
+//   op=fma512|fma256|fma128|none   timed block (fma256/fma128 = narrower
+//                           controls: if all widths step together the effect
+//                           is not width-specific lane gating; none = empty
+//                           region, harness control)
 //   spin=nopause|pause      idle loop style
 //   warm_us=0               before each idle, run FMA blocks back-to-back for
 //                           this long so the voltage/power license transition
-//                           finishes before the gap (fma256 warms with 256-bit,
-//                           fma512 and none with 512-bit)
+//                           finishes before the gap (each fma op warms with its
+//                           own width, none with 512-bit)
 // CSV  : unit,delta_ns,trial,tsc,cyc,tsc_mhz,cpu   (raw; timer overhead included)
 // stderr: config, timer overhead, and per delta: median tsc, median/p90 cyc,
 //         f_idle = median core MHz measured across the idle spin.
@@ -28,7 +30,7 @@ static const double DELTAS_NS[] = {
 };
 #define ND (sizeof DELTAS_NS / sizeof DELTAS_NS[0])
 
-enum { OP_NONE, OP_FMA512, OP_FMA256 };
+enum { OP_NONE, OP_FMA512, OP_FMA256, OP_FMA128 };
 
 // Zero idioms (handled at rename, no execution) then 64 independent FMAs on
 // zeros (no denormal assists).
@@ -50,6 +52,9 @@ static inline __attribute__((always_inline)) void block512(void) {
 static inline __attribute__((always_inline)) void block256(void) {
     __asm__ volatile(ZERO10 ".rept 8\n" FMA8("ymm") ".endr\n" ::: CLOB);
 }
+static inline __attribute__((always_inline)) void block128(void) {
+    __asm__ volatile(ZERO10 ".rept 8\n" FMA8("xmm") ".endr\n" ::: CLOB);
+}
 static inline __attribute__((always_inline)) void spin_nopause(uint64_t n) {
     uint64_t t0 = __rdtsc();
     while (__rdtsc() - t0 < n) ;
@@ -69,7 +74,9 @@ int main(int argc, char **argv) {
     int trials = atoi(arg(argc, argv, "trials", "200"));
     const char *ops = arg(argc, argv, "op", "fma512");
     const char *spins = arg(argc, argv, "spin", "nopause");
-    int op = !strcmp(ops, "none") ? OP_NONE : !strcmp(ops, "fma256") ? OP_FMA256 : OP_FMA512;
+    int op = !strcmp(ops, "none") ? OP_NONE : !strcmp(ops, "fma256") ? OP_FMA256
+           : !strcmp(ops, "fma128") ? OP_FMA128 : !strcmp(ops, "fma512") ? OP_FMA512 : -1;
+    if (op < 0) { fprintf(stderr, "bad op\n"); return 2; }
     int pause = !strcmp(spins, "pause");
     double warm_us = atof(arg(argc, argv, "warm_us", "0"));
 
@@ -96,14 +103,16 @@ int main(int argc, char **argv) {
             uint64_t n = (uint64_t)(DELTAS_NS[d] * mhz / 1e3);
             if (wn) {
                 uint64_t w0 = __rdtsc();
-                if (op == OP_FMA256) while (__rdtsc() - w0 < wn) block256();
-                else                 while (__rdtsc() - w0 < wn) block512();
+                if (op == OP_FMA256)      while (__rdtsc() - w0 < wn) block256();
+                else if (op == OP_FMA128) while (__rdtsc() - w0 < wn) block128();
+                else                      while (__rdtsc() - w0 < wn) block512();
             }
             stamp_t p = stamp(&c);
             if (pause) spin_tsc(n); else spin_nopause(n);
             stamp_t q = stamp(&c);                    // end of idle window
             stamp_t s0 = stamp(&c);
             if (op == OP_FMA512) block512(); else if (op == OP_FMA256) block256();
+            else if (op == OP_FMA128) block128();
             stamp_t s1 = stamp(&c);
             size_t k = (size_t)d * trials + t;
             rt[k] = d_tsc(s0, s1);

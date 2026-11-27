@@ -1,7 +1,7 @@
 # Builds every bench/*.c, attack/*.c and env/*.c into build/<name>.
 CC      ?= gcc
 CFLAGS  ?= -O2 -g -Wall -Wextra -march=sapphirerapids -mamx-tile -mamx-int8 -mamx-bf16 -Ibench/common
-LDLIBS  ?=
+LDLIBS  ?= -pthread -lm
 # Off-core probes link against these (installed on artemisia):
 DSA_LIBS = -laccel-config
 QAT_LIBS = -lqat -lusdm
