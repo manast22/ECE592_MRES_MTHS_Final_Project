@@ -8,7 +8,9 @@
 //
 // Usage: taskset -c <cpu> build/hold_state [key=val ...] >> out.csv
 //   cpu=10  op=dpbssd|fma512|fma256|none  delta_ns=1000  secs=5  header=0|1
-// CSV: unit,delta_ns,secs,ops,ops_per_s,pkg_w,dram_w,core_mhz,cpu
+//   burst=1   ops issued back-to-back per iteration (e.g. burst=64 with
+//             delta_ns=0 saturates the unit: "fully active" reference power)
+// CSV: unit,delta_ns,burst,secs,ops,ops_per_s,pkg_w,dram_w,core_mhz,cpu
 #include "timer.h"
 #include "amx.h"
 #include "args.h"
@@ -67,6 +69,8 @@ int main(int argc, char **argv) {
     double delta = atof(kv(argc, argv, "delta_ns", "1000"));
     double secs = atof(kv(argc, argv, "secs", "5"));
     int header = atoi(kv(argc, argv, "header", "0"));
+    int burst = atoi(kv(argc, argv, "burst", "1"));
+    if (burst < 1) burst = 1;
     int op = !strcmp(ops, "dpbssd") ? OP_DP : !strcmp(ops, "fma512") ? OP_F512
            : !strcmp(ops, "fma256") ? OP_F256 : !strcmp(ops, "none") ? OP_NONE : -1;
     if (op < 0) { fprintf(stderr, "bad op\n"); return 2; }
@@ -87,14 +91,15 @@ int main(int argc, char **argv) {
 
     // warm-up: settle into the steady state for this delta
     uint64_t w0 = __rdtsc(), wn = (uint64_t)(0.5 * mhz * 1e6);
-    while (__rdtsc() - w0 < wn) { uint64_t t = __rdtsc(); while (__rdtsc() - t < n) ; do_op(op); }
+    while (__rdtsc() - w0 < wn) { uint64_t t = __rdtsc(); while (__rdtsc() - t < n) ; for (int i = 0; i < burst; i++) do_op(op); }
 
     uint64_t e0 = rd_u64(pe), d0 = dz[0] ? rd_u64(de) : 0;
     stamp_t a = stamp(&c);
     uint64_t len = (uint64_t)(secs * mhz * 1e6), ops_n = 0;
     while (__rdtsc() - a.tsc < len) {
         uint64_t t = __rdtsc(); while (__rdtsc() - t < n) ;
-        do_op(op); ops_n++;
+        for (int i = 0; i < burst; i++) do_op(op);
+        ops_n += burst;
     }
     stamp_t b = stamp(&c);
     uint64_t e1 = rd_u64(pe), d1 = dz[0] ? rd_u64(de) : 0;
@@ -102,8 +107,8 @@ int main(int argc, char **argv) {
     double dt = d_tsc(a, b) / (mhz * 1e6);
     double pw = e_diff(e0, e1, pmax) / 1e6 / dt, dw = dz[0] ? e_diff(d0, d1, dmax) / 1e6 / dt : 0;
     double core = mhz * d_cyc(&c, a, b) / (double)d_tsc(a, b);
-    if (header) printf("unit,delta_ns,secs,ops,ops_per_s,pkg_w,dram_w,core_mhz,cpu\n");
-    printf("%s,%.0f,%.3f,%lu,%.0f,%.3f,%.3f,%.0f,%d\n", ops, delta, dt, ops_n, ops_n / dt, pw, dw, core, cpu);
+    if (header) printf("unit,delta_ns,burst,secs,ops,ops_per_s,pkg_w,dram_w,core_mhz,cpu\n");
+    printf("%s,%.0f,%d,%.3f,%lu,%.0f,%.3f,%.3f,%.0f,%d\n", ops, delta, burst, dt, ops_n, ops_n / dt, pw, dw, core, cpu);
     fflush(stdout);
     return 0;
 }

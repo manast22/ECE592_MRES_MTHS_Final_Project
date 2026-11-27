@@ -8,6 +8,8 @@
 //
 // Usage: taskset -c <cpu> build/amx_probe [key=val ...] > out.csv
 //   cpu=10  trials=100  dmax_ns=1e8 (100 ms; one trial costs ~2.3*dmax)
+//   dmin_ns=0   >0 drops delta=0 and grid points below it (long-idle sweeps,
+//               e.g. dmin_ns=1.7e8 dmax_ns=1e10 trials=6 ~ 2.3 min)
 //   op=dpbssd     one TDPBSSD
 //      dpbssd_st  TDPBSSD + TILESTORED (forces the result to memory)
 //      tileload   one TILELOADD (load path only)
@@ -33,6 +35,7 @@ int main(int argc, char **argv) {
     int cpu = atoi(kv(argc, argv, "cpu", "10"));
     int trials = atoi(kv(argc, argv, "trials", "100"));
     double dmax = atof(kv(argc, argv, "dmax_ns", "1e8"));
+    double dmin = atof(kv(argc, argv, "dmin_ns", "0"));
     const char *ops = kv(argc, argv, "op", "dpbssd");
     int op = !strcmp(ops, "dpbssd") ? OP_DP : !strcmp(ops, "dpbssd_st") ? OP_DPST
            : !strcmp(ops, "tileload") ? OP_LOAD : !strcmp(ops, "none") ? OP_NONE : -1;
@@ -40,16 +43,17 @@ int main(int argc, char **argv) {
 
     static const double MULT[4] = {1.0, 1.778279, 3.162278, 5.623413};
     double D[MAXD]; size_t nd = 0;
-    D[nd++] = 0;
+    if (dmin <= 0) D[nd++] = 0;
     for (double dec = 100; nd < MAXD; dec *= 10) {
         int stop = 0;
         for (int i = 0; i < 4 && nd < MAXD; i++) {
             double d = dec * MULT[i];
             if (d > dmax * 1.0001) { stop = 1; break; }
-            D[nd++] = d;
+            if (d >= dmin * 0.9999) D[nd++] = d;
         }
         if (stop) break;
     }
+    if (nd == 0) { fprintf(stderr, "empty delta grid\n"); return 2; }
 
     pin_cpu(cpu);
     cyc_t c; cyc_open(&c);
@@ -59,8 +63,8 @@ int main(int argc, char **argv) {
     enum { NO = 20000 };
     static uint64_t ot[NO], oc[NO];
     for (int i = 0; i < NO; i++) { stamp_t a = stamp(&c), b = stamp(&c); ot[i] = d_tsc(a, b); oc[i] = d_cyc(&c, a, b); }
-    fprintf(stderr, "unit=amx_%s cpu=%d trials=%d deltas=%zu dmax_ns=%.0f tsc_mhz=%.1f overhead_med tsc=%lu cyc=%lu\n",
-            ops, cpu, trials, nd, dmax, mhz, pct(ot, NO, 50), pct(oc, NO, 50));
+    fprintf(stderr, "unit=amx_%s cpu=%d trials=%d deltas=%zu dmin_ns=%.0f dmax_ns=%.0f tsc_mhz=%.1f overhead_med tsc=%lu cyc=%lu\n",
+            ops, cpu, trials, nd, dmin, dmax, mhz, pct(ot, NO, 50), pct(oc, NO, 50));
 
     size_t N = nd * (size_t)trials;
     uint64_t *rt = malloc(8 * N), *rc = malloc(8 * N), *fi = malloc(8 * N);

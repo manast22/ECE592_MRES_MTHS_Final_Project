@@ -13,6 +13,10 @@
 //   op=fma512|fma256|none   timed block (fma256 = control without upper lanes,
 //                           none = empty region, harness control)
 //   spin=nopause|pause      idle loop style
+//   warm_us=0               before each idle, run FMA blocks back-to-back for
+//                           this long so the voltage/power license transition
+//                           finishes before the gap (fma256 warms with 256-bit,
+//                           fma512 and none with 512-bit)
 // CSV  : unit,delta_ns,trial,tsc,cyc,tsc_mhz,cpu   (raw; timer overhead included)
 // stderr: config, timer overhead, and per delta: median tsc, median/p90 cyc,
 //         f_idle = median core MHz measured across the idle spin.
@@ -67,16 +71,18 @@ int main(int argc, char **argv) {
     const char *spins = arg(argc, argv, "spin", "nopause");
     int op = !strcmp(ops, "none") ? OP_NONE : !strcmp(ops, "fma256") ? OP_FMA256 : OP_FMA512;
     int pause = !strcmp(spins, "pause");
+    double warm_us = atof(arg(argc, argv, "warm_us", "0"));
 
     pin_cpu(cpu);
     cyc_t c; cyc_open(&c);
     double mhz = tsc_mhz();
+    uint64_t wn = (uint64_t)(warm_us * mhz);
 
     enum { NO = 20000 };
     static uint64_t ot[NO], oc[NO];
     for (int i = 0; i < NO; i++) { stamp_t a = stamp(&c), b = stamp(&c); ot[i] = d_tsc(a, b); oc[i] = d_cyc(&c, a, b); }
-    fprintf(stderr, "op=%s spin=%s cpu=%d trials=%d tsc_mhz=%.1f overhead_med tsc=%lu cyc=%lu\n",
-            ops, spins, cpu, trials, mhz, pct(ot, NO, 50), pct(oc, NO, 50));
+    fprintf(stderr, "op=%s spin=%s warm_us=%.0f cpu=%d trials=%d tsc_mhz=%.1f overhead_med tsc=%lu cyc=%lu\n",
+            ops, spins, warm_us, cpu, trials, mhz, pct(ot, NO, 50), pct(oc, NO, 50));
 
     size_t N = ND * (size_t)trials;
     uint64_t *rt = malloc(8 * N), *rc = malloc(8 * N), *fi = malloc(8 * N);
@@ -88,6 +94,11 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < ND; i++) {
             int d = order[i];
             uint64_t n = (uint64_t)(DELTAS_NS[d] * mhz / 1e3);
+            if (wn) {
+                uint64_t w0 = __rdtsc();
+                if (op == OP_FMA256) while (__rdtsc() - w0 < wn) block256();
+                else                 while (__rdtsc() - w0 < wn) block512();
+            }
             stamp_t p = stamp(&c);
             if (pause) spin_tsc(n); else spin_nopause(n);
             stamp_t q = stamp(&c);                    // end of idle window
