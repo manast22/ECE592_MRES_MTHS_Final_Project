@@ -1,0 +1,10 @@
+cpu=10 sibling=10,66 numa=node0
+isolated=28-55,84-111 nohz_full=(null)
+governor=performance min=800000 max=4100000 no_turbo=0
+cstates: POLL(dis=0) C1(dis=0) 
+user tasks currently on cpu10: dbus-broker sudo bash tr 
+tsc_mhz~2000
+scalar  effective= 2700 MHz  dev= 35.0%  FAIL
+avx512  effective= 2700 MHz  dev= 35.0%  FAIL
+amx     effective= 2500 MHz  dev= 25.0%  FAIL
+WARN: core is NOT running at TSC frequency -> cycle counts are confounded by DVFS (see PLAN.md §Platform)

@@ -1,0 +1,13 @@
+null n=15 seed=1795818888 A=none:0:1 B=none:0:1 | A 117.94 W  B 117.48 W | A-B 0.462 +- 0.805 W (95%, 15 blocks) = 0.031 W/core | ops/s/core A 1.69e+07 B 1.69e+07
+amx_sat n=15 seed=1795818952 A=dpbssd:0:64 B=none:0:1 | A 118.88 W  B 117.72 W | A-B 1.152 +- 0.909 W (95%, 15 blocks) = 0.077 W/core | ops/s/core A 5.85e+07 B 1.69e+07
+amx_300ns n=15 seed=1795819016 A=dpbssd:300:1 B=none:300:1 | A 118.87 W  B 115.91 W | A-B 2.961 +- 0.625 W (95%, 15 blocks) = 0.197 W/core | ops/s/core A 1.57e+06 B 1.58e+06
+amx_1us n=15 seed=1795819080 A=dpbssd:1000:1 B=none:1000:1 | A 117.87 W  B 116.31 W | A-B 1.560 +- 1.317 W (95%, 15 blocks) = 0.104 W/core | ops/s/core A 4.87e+05 B 4.83e+05
+amx_20us n=15 seed=1795819144 A=dpbssd:20000:1 B=none:20000:1 | A 117.02 W  B 115.37 W | A-B 1.647 +- 0.615 W (95%, 15 blocks) = 0.110 W/core | ops/s/core A 2.51e+04 B 2.51e+04
+amx_1ms n=15 seed=1795819209 A=dpbssd:1000000:1 B=none:1000000:1 | A 117.73 W  B 116.88 W | A-B 0.850 +- 1.533 W (95%, 15 blocks) = 0.057 W/core | ops/s/core A 516 B 515
+amx_20us_vs_300ns n=15 seed=1795819273 A=dpbssd:20000:1 B=dpbssd:300:1 | A 118.72 W  B 120.00 W | A-B -1.283 +- 1.095 W (95%, 15 blocks) = -0.086 W/core | ops/s/core A 2.56e+04 B 1.62e+06
+avx512_sat n=15 seed=1795819337 A=fma512:0:8 B=none:0:1 | A 121.71 W  B 117.05 W | A-B 4.661 +- 1.266 W (95%, 15 blocks) = 0.311 W/core | ops/s/core A 2.63e+07 B 1.68e+07
+avx256_sat n=15 seed=1795819401 A=fma256:0:8 B=none:0:1 | A 122.31 W  B 120.23 W | A-B 2.075 +- 0.852 W (95%, 15 blocks) = 0.138 W/core | ops/s/core A 3.31e+07 B 2.02e+07
+avx512_20us n=15 seed=1795819465 A=fma512:20000:1 B=none:20000:1 | A 131.12 W  B 129.69 W | A-B 1.429 +- 1.196 W (95%, 15 blocks) = 0.095 W/core | ops/s/core A 4.64e+04 B 4.65e+04
+amx_sat_n1 n=1 seed=1795819529 A=dpbssd:0:64 B=none:0:1 | A 116.52 W  B 116.05 W | A-B 0.476 +- 1.365 W (95%, 15 blocks) = 0.476 W/core | ops/s/core A 1.08e+08 B 3.47e+07
+amx_sat_n4 n=4 seed=1795819593 A=dpbssd:0:64 B=none:0:1 | A 121.15 W  B 121.32 W | A-B -0.171 +- 0.959 W (95%, 15 blocks) = -0.043 W/core | ops/s/core A 9.81e+07 B 3.09e+07
+amx_sat_n8 n=8 seed=1795819658 A=dpbssd:0:64 B=none:0:1 | A 123.14 W  B 122.12 W | A-B 1.028 +- 0.753 W (95%, 15 blocks) = 0.129 W/core | ops/s/core A 1.44e+08 B 4.56e+07

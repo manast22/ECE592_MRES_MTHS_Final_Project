@@ -58,3 +58,38 @@ Fix (`bench/power_ab.c`): 1 s windows (integrate one whole pulse) + random
 ABBA/BAAB block order + wall-clock t_ns per window. Post-fix null on 2 cores,
 turbo on: **0.16 ± 0.61 W** (OK). Rerun: `scripts/run_phase12.sh 10 p2`
 (~16 min, Phase 2 only).
+
+## Phase 2 rerun — 17:34 (`data/raw/phase12_artemisia_20261127-1734_p2/`)
+
+Fixed power_ab (1 s windows, random ABBA/BAAB, 16 blocks, 15 cores 2-9,11-17).
+**The stale 17:04 auto-restore timer fired at 17:44:09 and re-enabled turbo
+mid-run** (verify_end FAIL). Valid runs = those that finished before 17:44:09
+(first 8). `avx256_sat` (17:43:21) straddles the switch; it and everything
+after it (`avx512_20us`, `amx_sat_n1/n4/n8`) is excluded.
+Summary: `data/processed/phase2/power_by_state.csv`
+(`analysis/processing/power_by_state.py`).
+
+| run (A vs B, 15 cores) | A−B (W, 95 % CI) | per core (W) |
+|---|---:|---:|
+| null (spin vs spin) | +0.46 ± 0.81 | **OK, consistent with 0** |
+| AMX "saturated" 64-burst vs spin | +1.15 ± 0.91 | 0.08 ± 0.06 |
+| AMX every 300 ns (warm) vs spin | **+2.96 ± 0.63** | **0.20 ± 0.04** |
+| AMX every 1 µs (~680 state) vs spin | +1.56 ± 1.32 | 0.10 ± 0.09 |
+| AMX every 20 µs (5.7k gated) vs spin | **+1.65 ± 0.62** | **0.11 ± 0.04** |
+| AMX every 1 ms vs spin | +0.85 ± 1.53 | n.s. |
+| AMX 20 µs vs AMX 300 ns (gated − warm) | −1.28 ± 1.10 | −0.09 ± 0.07 |
+| AVX-512 saturated vs spin | **+4.66 ± 1.27** | **0.31 ± 0.08** |
+
+Reading:
+- The method now works (null passes) and resolves ~0.05 W/core.
+- Keeping AMX warm (op every 300 ns) costs ~0.2 W/core over a scalar spin;
+  letting it gate between ops (20 µs) roughly halves that; gated−warm
+  ≈ −0.09 W/core (CI just touches 0). At 2.0 GHz fixed, this is the
+  per-core power-gating saving — small, as GateBleed found (3.6 W was
+  package-level at full turbo).
+- The "saturated" AMX run is not saturated: 64 back-to-back TDPBSSD on the
+  same accumulator tile are latency-bound (1.2e8 ops/s = 1 per ~17 cycles),
+  so it draws less than expected. Needs independent accumulators (tiles 0-3)
+  for a true full-load reference.
+- Still to do: rerun the excluded runs (avx256_sat, avx512_20us, core-count
+  scaling n=1/4/8) and a true-saturation AMX run.
