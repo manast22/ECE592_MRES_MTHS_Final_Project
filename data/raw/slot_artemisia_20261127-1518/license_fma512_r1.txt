@@ -1,0 +1,2 @@
+op=fma512 cpu=10 reps=50 idle_us=2000 window_us=40 tsc_mhz=2000
+reps_with_halt=50/50  halts=310  median_start=2561 ns  median_dur=271 ns  max_dur=200700 ns  mean_halted_per_rep=6155 ns

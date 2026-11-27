@@ -1,0 +1,2 @@
+op=amx cpu=10 reps=50 idle_us=2000 window_us=40 tsc_mhz=2000
+reps_with_halt=50/50  halts=158  median_start=4652 ns  median_dur=392 ns  max_dur=175248 ns  mean_halted_per_rep=4995 ns

@@ -1,0 +1,6 @@
+cpu=10 n=100000 tsc_mhz=2000.0 rdpmc_idx=1073741825 pmc_width=48
+empty  tsc  min=   46 med=   54 p99=    58 max=    6360
+empty  cyc  min=   51 med=   53 p99=    56 max=    6344   core~1963 MHz
+chain  tsc  min= 3044 med= 3060 p99=  3070 max=  128994
+chain  cyc  min= 3050 med= 3052 p99=  3053 max=   44953   core~1995 MHz
+chain net core cycles = 2999 (expect ~3000)  -> PASS

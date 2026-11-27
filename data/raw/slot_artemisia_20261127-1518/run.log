@@ -1,0 +1,23 @@
+== 15:18:26 verify_env (start)
+== 15:18:33 check_amx
+== 15:18:33 timer_test
+== 15:18:33 license_timeline fma512 (run 1)
+== 15:18:33 license_timeline fma256 (run 1)
+== 15:18:33 license_timeline amx (run 1)
+== 15:18:34 license_timeline none (run 1)
+== 15:18:34 license_timeline fma512 (run 2)
+== 15:18:34 license_timeline fma256 (run 2)
+== 15:18:34 license_timeline amx (run 2)
+== 15:18:35 license_timeline none (run 2)
+== 15:18:35 avx512_probe fma512 (trials=200 warm_us=100)
+== 15:18:40 avx512_probe fma256 (trials=200 warm_us=100)
+== 15:18:45 avx512_probe none (trials=200 warm_us=100)
+== 15:18:50 amx_probe dpbssd_st (trials=100, 0-100 ms)
+== 15:19:13 amx_probe dpbssd (trials=100, 0-100 ms)
+== 15:19:36 amx_probe tileload (trials=100, 0-100 ms)
+== 15:19:59 amx_probe none (trials=100, 0-100 ms)
+== 15:20:22 amx_probe dpbssd_st LONG (trials=6, 178 ms-10 s)
+== 15:22:38 amx_probe none LONG (trials=4, 178 ms-10 s)
+== 15:24:09 hold_state (secs=10 reps=4, 8 runs/rep)
+== 15:29:48 verify_env (end)
+== 15:29:55 done -> data/raw/slot_artemisia_20261127-1518
