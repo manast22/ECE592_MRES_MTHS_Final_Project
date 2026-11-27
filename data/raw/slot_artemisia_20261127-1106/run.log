@@ -1,0 +1,17 @@
+== 11:06:45 verify_env (start)
+== 11:06:53 check_amx
+== 11:06:53 timer_test
+== 11:06:53 license_timeline fma512
+== 11:06:53 license_timeline fma256
+== 11:06:53 license_timeline amx
+== 11:06:54 license_timeline none
+== 11:06:54 avx512_probe fma512 (trials=200)
+== 11:06:59 avx512_probe fma256 (trials=200)
+== 11:07:03 avx512_probe none (trials=200)
+== 11:07:08 amx_probe dpbssd (trials=100)
+== 11:07:31 amx_probe dpbssd_st (trials=100)
+== 11:07:54 amx_probe tileload (trials=100)
+== 11:08:17 amx_probe none (trials=100)
+== 11:08:40 hold_state (secs=5 reps=2)
+== 11:12:02 verify_env (end)
+== 11:12:09 done -> data/raw/slot_artemisia_20261127-1106

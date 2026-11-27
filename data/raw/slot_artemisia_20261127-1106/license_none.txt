@@ -1,0 +1,2 @@
+op=none cpu=10 reps=50 idle_us=2000 window_us=40 tsc_mhz=2000
+reps_with_halt=34/50  halts=200  median_start=2515 ns  median_dur=272 ns  max_dur=153073 ns  mean_halted_per_rep=4388 ns
