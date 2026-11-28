@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Turbo-off slot 3: fill the Phase-1 gaps and redo Phase 2 with the A/B probe.
 # Run AFTER `sudo env/setup_env.sh` (this script needs no root). ~24 min (p2 only: ~16 min).
-# Usage: scripts/run_phase12.sh [cpu=10] [quick|p2]   (quick = smoke test ~3 min, p2 = Phase 2 only)
+# Usage: scripts/run_phase12.sh [cpu=10] [quick|p2|p2b|p2bquick]
+#   quick = smoke test ~3 min, p2 = Phase 2 only (~16 min),
+#   p2b = only the slot-3 leftovers (~7 min), p2bquick = its smoke test (~2 min)
 #
 # Phase 1 (cpu, default 10):
 #   P1a AVX width controls  fma512/fma256/fma128/none, 100 us warm-up
@@ -21,6 +23,7 @@ make -s all || { echo "build failed" >&2; exit 1; }
 
 AT=50; LT=4; LS=6; VT=200; CT=100; WIN=64       # trials / 1-s power windows
 [ "$QUICK" = quick ] && { AT=3; LT=1; LS=1; VT=10; CT=5; WIN=8; }
+[ "$QUICK" = p2bquick ] && WIN=8
 NBR=12-15; CPU2=12; PCPUS=2-9,11-17               # neighbour cores, 2nd core, power cores
 OUT=data/raw/phase12_$(hostname -s)_$(date +%Y%m%d-%H%M)${QUICK:+_$QUICK}
 mkdir -p "$OUT"
@@ -36,7 +39,7 @@ env/verify_env.sh "$CPU" 2>&1 | tee "$OUT/verify_start.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || log "WARNING: frequency NOT pinned (turbo on?). Data saved but confounded by DVFS."
 $T build/check_amx > "$OUT/check_amx.txt" 2>&1
 
-if [ "$QUICK" != p2 ]; then   # ===== Phase 1 (skipped in p2 mode) =====
+if [ "$QUICK" != p2 ] && [ "$QUICK" != p2b ] && [ "$QUICK" != p2bquick ]; then   # ===== Phase 1 (skipped in p2* modes) =====
 bench/sys_logger.sh "$CPU" 1 > "$OUT/sys.csv" & LOGPID=$!
 trap 'kill $LOGPID 2>/dev/null' EXIT
 
@@ -104,6 +107,15 @@ pab() {  # label cpus a b
   tail -1 "$S"
 }
 pab null        $PCPUS none:0:1          none:0:1
+if [ "$QUICK" = p2b ] || [ "$QUICK" = p2bquick ]; then
+  # slot 4: what the 17:34 rerun lost to the stale timer (~7 min)
+  pab avx256_sat  $PCPUS fma256:0:8        none:0:1
+  pab avx512_20us $PCPUS fma512:20000:1    none:20000:1
+  for n in 1 4 8; do
+    cs=$(echo $PCPUS | tr , '\n' | while IFS=- read a b; do seq $a ${b:-$a}; done | head -$n | paste -sd,)
+    pab amx_sat_n$n "$cs" dpbssd:0:64 none:0:1
+  done
+else
 pab amx_sat     $PCPUS dpbssd:0:64       none:0:1
 pab amx_300ns   $PCPUS dpbssd:300:1      none:300:1
 pab amx_1us     $PCPUS dpbssd:1000:1     none:1000:1
@@ -117,6 +129,7 @@ for n in 1 4 8; do
   cs=$(echo $PCPUS | tr , '\n' | while IFS=- read a b; do seq $a ${b:-$a}; done | head -$n | paste -sd,)
   pab amx_sat_n$n "$cs" dpbssd:0:64 none:0:1
 done
+fi
 
 log "verify_env (end)"
 env/verify_env.sh "$CPU" 2>&1 | tee "$OUT/verify_end.txt"

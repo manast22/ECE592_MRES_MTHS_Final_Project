@@ -151,7 +151,8 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
 - [x] Slot 3 run: **null test failed** (−2.3 ± 0.7 W) — a 1 Hz, 2.7 W pulse
       from another tenant aliased onto the 1 s ABBA period. Fixed: 1 s windows
       + random ABBA/BAAB order (2-core null after fix: 0.16 ± 0.61 W).
-- [ ] Rerun Phase 2 only: `scripts/run_phase12.sh 10 p2` (~16 min).
+- [x] Rerun Phase 2 only: `scripts/run_phase12.sh 10 p2` (17:34; null OK; first 8 runs valid, stale timer restored turbo at 17:44)
+- [ ] Finish Phase 2 leftovers: `scripts/run_phase12.sh 10 p2b` (~7 min: avx256_sat, avx512_20us, amx_sat_n1/4/8)
 
 ### Data to collect → `data/phase2/`
 - `amx_power_by_state.csv`: `state, pkg_watts, core_watts, ops_per_s`.

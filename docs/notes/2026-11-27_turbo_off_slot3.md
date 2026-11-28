@@ -87,9 +87,11 @@ Reading:
   ≈ −0.09 W/core (CI just touches 0). At 2.0 GHz fixed, this is the
   per-core power-gating saving — small, as GateBleed found (3.6 W was
   package-level at full turbo).
-- The "saturated" AMX run is not saturated: 64 back-to-back TDPBSSD on the
-  same accumulator tile are latency-bound (1.2e8 ops/s = 1 per ~17 cycles),
-  so it draws less than expected. Needs independent accumulators (tiles 0-3)
-  for a true full-load reference.
+- The "saturated" AMX run **is** saturated: 1.2e8 ops/s at 2.0 GHz = 1
+  TDPBSSD per ~16 cycles, the unit's throughput limit (16x16x64 MACs at
+  1024 MACs/cycle). Checked after the slot: 4 independent accumulators
+  (tiles 0,3,4,5) give the same 1.44e8 ops/s/core as one chained tile (turbo
+  on). So AMX compute alone really draws only ~0.08 W/core more than a spin
+  at 2.0 GHz; operand loads from memory are not included.
 - Still to do: rerun the excluded runs (avx256_sat, avx512_20us, core-count
-  scaling n=1/4/8) and a true-saturation AMX run.
+  scaling n=1/4/8): `scripts/run_phase12.sh 10 p2b` (~7 min).
