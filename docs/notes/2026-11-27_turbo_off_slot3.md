@@ -140,3 +140,24 @@ Reading:
   /256 every 20 us show **no penalty** (70 / 66 ticks, same as every 300 ns).
   Periodic use keeps the units out of deep gating, so the "gated" power so far
   is really the shallow state. Confirm turbo-off: `scripts/run_phase12.sh 10 p2c`.
+
+## Checking candidate explanations for 9.4k / no 20k (20:40)
+
+Read as user on artemisia (`rdmsr` has cap_sys_rawio):
+EPB (0x1B0) = 6 on all cores; MSR_PKG_CST_CONFIG_CONTROL (0xE2) = 0x5;
+POWER_CTL (0x1FC) = 0x1600ac0059 (C1E off); uncore ratio limit (0x620) =
+0x1616 -> **uncore pinned 2.2 GHz** (current 0x621 = 2.2 GHz); idle driver
+`acpi_idle`, states POLL + C1 only (intel_idle not in use); microcode
+0x2b000685; BIOS Lenovo ESE136G-3.70 (2025-09-04); kernel 6.17.8 (not 5.14);
+**no reboot since 2026-10-26**; tuned inactive, profile file unchanged since boot.
+
+| guess | verdict |
+|---|---|
+| BIOS/EPB power profile | Plausible for no-20k (C1-only + pinned uncore look like a performance profile). Not the 11:06 change: no reboot, no tuned, EPB 6 everywhere. Testable: EPB 15 on CPU 10 (root) |
+| Microcode/BIOS version | Not the 11:06 change (no reboot). Vs GateBleed: need their version |
+| Other tenants | Weak: package power 102.6 W (11:06) vs 102.5 W (15:18) |
+| Sleep can't reach C6 | Confirmed: acpi_idle offers only C1. Best explanation for no 20k |
+| Usage history | Not for 20k: long sweeps already had 0.17-10 s between ops |
+| Timer tick | Not the 9.4k trigger: slot-1 9.4k share 2 % -> 45 % at 100 us, plateau 80-85 %; a 1 kHz tick would give 10 % at 100 us and 100 % at >= 1 ms |
+
+run_phase12.sh now logs these MSRs, idle states, microcode and boot time in meta.txt.

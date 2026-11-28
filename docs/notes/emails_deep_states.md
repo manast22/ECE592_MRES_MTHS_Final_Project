@@ -16,7 +16,8 @@ GateBleed reported on Sapphire Rapids. I've reproduced most of it, but one state
 behaves strangely and I'd value your read on it.
 
 **Setup.**
-- Machine: 2x Xeon Gold 5420+ (Sapphire Rapids), RHEL 9, kernel 5.14. It's a shared server.
+- Machine: 2x Xeon Gold 5420+ (Sapphire Rapids), Lenovo ThinkSystem SR650 V3 (BIOS ESE136G-3.70), microcode 0x2b000685, RHEL 9 with kernel 6.17. It's a shared server, not rebooted since 26 Oct.
+- Power settings: EPB = 6 on all cores, uncore pinned at 2.2 GHz (MSR 0x620 = 0x1616), and C1E off. The idle driver is `acpi_idle` with only POLL and C1, so core C6 is never requested.
 - Frequency: turbo off per core (IA32_MISC_ENABLE bit 38), and min = max = 2.0 GHz, so TSC ticks equal core cycles.
 - Pinning: one test core (CPU 10), with its sibling and neighbors otherwise idle.
 - Method: spin for a chosen idle time Î” (100 ns to 10 s, log-spaced, 50 trials each, shuffled). Then time one `TDPBSSD` + `TILESTORED` with `LFENCE;RDTSC;RDPMC;LFENCE`.
@@ -45,10 +46,17 @@ Same binary, core and settings. Data: `data/raw/slot_artemisia_20261127-1106/`.
 
 Package and core C6 residency both read 0 here; the only idle states exposed are POLL and C1.
 
+I also ruled out the following:
+- **No settings change between sessions.** The server was not rebooted, and tuned is inactive (its profile is unchanged since boot).
+- **Not the uncore frequency.** The uncore is pinned at 2.2 GHz.
+- **Not other load on the socket.** Package power was the same in session 1 and session 2 (median 102.6 vs. 102.5 W).
+- **Not the timer tick.** In session 1 the share of 9.4k samples jumps from 2 % to 45 % at 100 µs and levels off around 80–85 %. If it were caused by the 1 kHz tick, the share would rise in proportion to idle time and reach 100 % at 1 ms.
+
 **Questions:**
 1. Have you seen AMX wake-up latency depend on package-level or socket-wide
-   state, such as other tenants, uncore frequency, or a package C-state that
-   isn't reported? Could 9.4k simply be 5.7k plus an uncore/mesh wake-up?
+   state, such as other tenants or a package C-state that isn't reported?
+   The uncore is pinned here, so it can't be an uncore frequency change.
+   Could 9.4k be 5.7k plus some other mesh wake-up?
 2. Is there an MSR or counter that would show which state AMX is in, or whether
    the core was "deeper" at 11:06? I can read MSRs with root during booked
    sessions.
@@ -98,8 +106,9 @@ never the ~20k one. I'd like to know what conditions your measurement used.
 1. In GateBleed, under what conditions did the ~20k state appear: idle length,
    how the core idled (spin, sleep, or deeper C-states), and core vs.
    package C6?
-2. Could 20k require core C6 (losing AMX state/power entirely), which this
-   server's BIOS never enters? If so, should I report the ladder as
+2. Could 20k require core C6 (losing AMX state/power entirely)? This
+   server's BIOS exposes only C1 to the OS (`acpi_idle`; EPB = 6), so the
+   core never enters C6. If so, should I report the ladder as
    "C-state-dependent" rather than a fixed 5 levels?
 3. Did you see the controller adapt to how often AMX is used (shallower states
    under frequent use)? This seems important for whether the channel works in

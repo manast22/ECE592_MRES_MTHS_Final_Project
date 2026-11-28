@@ -33,7 +33,12 @@ log() { echo "== $(date +%T) $*" | tee -a "$OUT/run.log"; }
 SIB=$(cut -d, -f2 /sys/devices/system/cpu/cpu$CPU/topology/thread_siblings_list)
 
 { date; uname -r; echo "cpu=$CPU sib=$SIB nbr=$NBR cpu2=$CPU2 power_cpus=$PCPUS quick=${QUICK:-no}"
-  env/setup_env.sh --status; md5sum bench/*.c bench/common/*.h bench/*.sh env/*.sh scripts/*.sh; } > "$OUT/meta.txt" 2>&1
+  env/setup_env.sh --status
+  # power-policy state (9.4k / 20k hunt): EPB, pkg C-state limit, POWER_CTL, uncore limit/current, idle states, microcode
+  for m in 0x1b0 0xe2 0x1fc 0x620 0x621; do echo "msr $m cpu$CPU = $(rdmsr -p $CPU $m 2>&1)"; done
+  echo "epb_sysfs=$(cat /sys/devices/system/cpu/cpu$CPU/power/energy_perf_bias 2>&1) idle_driver=$(cat /sys/devices/system/cpu/cpuidle/current_driver) states=$(cat /sys/devices/system/cpu/cpu$CPU/cpuidle/state*/name | paste -sd,)"
+  grep -m1 microcode /proc/cpuinfo; uptime -s
+  md5sum bench/*.c bench/common/*.h bench/*.sh env/*.sh scripts/*.sh; } > "$OUT/meta.txt" 2>&1
 
 log "verify_env (start)"
 env/verify_env.sh "$CPU" 2>&1 | tee "$OUT/verify_start.txt"
