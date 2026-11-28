@@ -161,3 +161,14 @@ POWER_CTL (0x1FC) = 0x1600ac0059 (C1E off); uncore ratio limit (0x620) =
 | Timer tick | Not the 9.4k trigger: slot-1 9.4k share 2 % -> 45 % at 100 us, plateau 80-85 %; a 1 kHz tick would give 10 % at 100 us and 100 % at >= 1 ms |
 
 run_phase12.sh now logs these MSRs, idle states, microcode and boot time in meta.txt.
+
+## EPB test (20:50, turbo ON — setup_env was not run)
+
+`data/raw/epb15/` (EPB 15 on CPU 10 + 66, set by hand, then back to 6) vs
+`data/raw/epb6_turbo/` (EPB 6 control, same commands right after).
+Both: one deep level only, **~6160 TSC ticks (3.08 us) = ~7920 core cycles at
+~2.69 GHz**, for every idle from 10 us to 10 s; the same median within 0.5 %;
+the same idle frequency. No 9.4k-equivalent (~4.7 us) or 20k-equivalent
+(~10 us) level. **EPB does not change AMX gating -> ruled out** (strictly,
+with turbo on). Side note: in wall time the wake-up is nearly the same as at
+2.0 GHz fixed (5.7k cycles = 2.85 us), so it scales with time, not cycles.
