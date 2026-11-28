@@ -95,3 +95,34 @@ Reading:
   at 2.0 GHz; operand loads from memory are not included.
 - Still to do: rerun the excluded runs (avx256_sat, avx512_20us, core-count
   scaling n=1/4/8): `scripts/run_phase12.sh 10 p2b` (~7 min).
+
+## Phase 2 leftovers — slot 4, 19:51 (`data/raw/phase12_artemisia_20261127-1951_p2b/`)
+
+`scripts/run_phase12.sh 10 p2b`. verify_env PASS at start **and end**; the
+new auto_restore token check means no stale timer could fire. Summary:
+`data/processed/phase2/power_by_state_p2b.csv`.
+
+| run (A vs B) | n | A−B (W, 95 % CI) | per core (W) |
+|---|---:|---:|---:|
+| null | 15 | −0.17 ± 0.69 | **OK** |
+| AVX-256 saturated vs spin | 15 | **+3.09 ± 0.66** | **0.21 ± 0.04** |
+| AVX-512 one op every 20 µs vs spin | 15 | **+3.04 ± 0.55** | **0.20 ± 0.04** |
+| AMX saturated vs spin | 1 | +0.61 ± 0.93 | n.s. |
+| AMX saturated vs spin | 4 | +1.86 ± 0.65 | 0.47 ± 0.16 |
+| AMX saturated vs spin | 8 | +2.76 ± 1.19 | 0.35 ± 0.15 |
+
+Reading:
+- AVX-256 saturated (0.21 W/core) < AVX-512 saturated (0.31, 17:34 run): wider
+  datapath costs more, as expected.
+- **Sparse AVX-512 (1 op / 20 µs, ~5e4 ops/s) costs as much as saturated
+  AVX-256.** The upper datapath is powered between ops (the 20 µs gap is past
+  the ~3 µs timing step, so the op pays the wake-up but the power is not
+  saved). Contrast AMX: sparse (20 µs) costs ~0.11 W/core, about half its
+  warm cost. Candidate explanation: the AVX timing step is a voltage/clock
+  re-ramp rather than a true power gate — needs a check.
+- AMX core scaling, n = 1/4/8 in this run: **0.31 ± 0.22 W/core** (linear
+  fit). This is higher than the 17:34 15-core run (0.08 W/core); adding that
+  point gives a slope of ~0. The two runs were 2 h apart with different
+  background power (B ≈ 110 W now vs ~117 W), so **only compare within one
+  run**. Within-run AMX saturated power is therefore ~0.1–0.35 W/core;
+  report it as a range.

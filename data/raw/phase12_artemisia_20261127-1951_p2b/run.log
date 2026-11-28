@@ -1,0 +1,9 @@
+== 19:51:27 verify_env (start)
+== 19:51:34 P2 power_ab null: A=none:0:1 B=none:0:1 cpus=2-9,11-17 (windows=64 x 1 s)
+== 19:52:38 P2 power_ab avx256_sat: A=fma256:0:8 B=none:0:1 cpus=2-9,11-17 (windows=64 x 1 s)
+== 19:53:42 P2 power_ab avx512_20us: A=fma512:20000:1 B=none:20000:1 cpus=2-9,11-17 (windows=64 x 1 s)
+== 19:54:46 P2 power_ab amx_sat_n1: A=dpbssd:0:64 B=none:0:1 cpus=2 (windows=64 x 1 s)
+== 19:55:50 P2 power_ab amx_sat_n4: A=dpbssd:0:64 B=none:0:1 cpus=2,3,4,5 (windows=64 x 1 s)
+== 19:56:55 P2 power_ab amx_sat_n8: A=dpbssd:0:64 B=none:0:1 cpus=2,3,4,5,6,7,8,9 (windows=64 x 1 s)
+== 19:57:59 verify_env (end)
+== 19:58:06 done -> data/raw/phase12_artemisia_20261127-1951_p2b
