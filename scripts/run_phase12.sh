@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Turbo-off slot 3: fill the Phase-1 gaps and redo Phase 2 with the A/B probe.
 # Run AFTER `sudo env/setup_env.sh` (this script needs no root). ~24 min (p2 only: ~16 min).
-# Usage: scripts/run_phase12.sh [cpu=10] [quick|p2|p2b|p2bquick]
+# Usage: scripts/run_phase12.sh [cpu=10] [quick|p2|p2b|p2bquick|p2c|p2cquick]
 #   quick = smoke test ~3 min, p2 = Phase 2 only (~16 min),
 #   p2b = only the slot-3 leftovers (~7 min), p2bquick = its smoke test (~2 min)
+#   p2c = matched warm/gated pairs with in-run latency, for the FoM (~9 min), p2cquick = smoke test
 #
 # Phase 1 (cpu, default 10):
 #   P1a AVX width controls  fma512/fma256/fma128/none, 100 us warm-up
@@ -23,7 +24,7 @@ make -s all || { echo "build failed" >&2; exit 1; }
 
 AT=50; LT=4; LS=6; VT=200; CT=100; WIN=64       # trials / 1-s power windows
 [ "$QUICK" = quick ] && { AT=3; LT=1; LS=1; VT=10; CT=5; WIN=8; }
-[ "$QUICK" = p2bquick ] && WIN=8
+{ [ "$QUICK" = p2bquick ] || [ "$QUICK" = p2cquick ]; } && WIN=8
 NBR=12-15; CPU2=12; PCPUS=2-9,11-17               # neighbour cores, 2nd core, power cores
 OUT=data/raw/phase12_$(hostname -s)_$(date +%Y%m%d-%H%M)${QUICK:+_$QUICK}
 mkdir -p "$OUT"
@@ -39,7 +40,8 @@ env/verify_env.sh "$CPU" 2>&1 | tee "$OUT/verify_start.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || log "WARNING: frequency NOT pinned (turbo on?). Data saved but confounded by DVFS."
 $T build/check_amx > "$OUT/check_amx.txt" 2>&1
 
-if [ "$QUICK" != p2 ] && [ "$QUICK" != p2b ] && [ "$QUICK" != p2bquick ]; then   # ===== Phase 1 (skipped in p2* modes) =====
+case "$QUICK" in p2*) PH1=no;; *) PH1=yes;; esac
+if [ $PH1 = yes ]; then   # ===== Phase 1 (skipped in p2* modes) =====
 bench/sys_logger.sh "$CPU" 1 > "$OUT/sys.csv" & LOGPID=$!
 trap 'kill $LOGPID 2>/dev/null' EXIT
 
@@ -103,11 +105,20 @@ P="$OUT/power_ab.csv"; S="$OUT/power_ab.txt"; : > "$S"
 echo "label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w,t_ns" > "$P"
 pab() {  # label cpus a b
   log "P2 power_ab $1: A=$3 B=$4 cpus=$2 (windows=$WIN x 1 s)"
-  build/power_ab label="$1" cpus="$2" a="$3" b="$4" win_ms=1000 windows=$WIN main=$CPU >> "$P" 2>> "$S"
-  tail -1 "$S"
+  build/power_ab label="$1" cpus="$2" a="$3" b="$4" win_ms=1000 windows=$WIN main=$CPU lat_out="$OUT/power_lat.csv" >> "$P" 2>> "$S"
+  grep -v "^  lat" "$S" | tail -1
 }
 pab null        $PCPUS none:0:1          none:0:1
-if [ "$QUICK" = p2b ] || [ "$QUICK" = p2bquick ]; then
+if [ "$QUICK" = p2c ] || [ "$QUICK" = p2cquick ]; then
+  # slot 5: matched warm-vs-gated pairs for the FoM (compute_fom.py), each op timed in-run (~9 min)
+  pab amx_300ns            $PCPUS dpbssd:300:1    none:300:1
+  pab amx_20us             $PCPUS dpbssd:20000:1  none:20000:1
+  pab amx_20us_vs_300ns    $PCPUS dpbssd:20000:1  dpbssd:300:1
+  pab avx512_300ns         $PCPUS fma512:300:1    none:300:1
+  pab avx512_20us_vs_300ns $PCPUS fma512:20000:1  fma512:300:1
+  pab avx256_20us          $PCPUS fma256:20000:1  none:20000:1
+  pab avx256_20us_vs_300ns $PCPUS fma256:20000:1  fma256:300:1
+elif [ "$QUICK" = p2b ] || [ "$QUICK" = p2bquick ]; then
   # slot 4: what the 17:34 rerun lost to the stale timer (~7 min)
   pab avx256_sat  $PCPUS fma256:0:8        none:0:1
   pab avx512_20us $PCPUS fma512:20000:1    none:20000:1

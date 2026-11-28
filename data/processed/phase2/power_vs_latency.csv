@@ -1,0 +1,15 @@
+session,label,n_cores,a,b,w_per_core,ci95_per_core,a_lat_inrun,a_lat_sweep,b_lat_inrun,b_lat_sweep
+phase12_artemisia_20261127-1734_p2,null,15,none:0:1,none:0:1,0.0308,0.0537,nan,nan,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_sat,15,dpbssd:0:64,none:0:1,0.0768,0.0606,nan,135,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_300ns,15,dpbssd:300:1,none:300:1,0.1974,0.0417,nan,135,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_1us,15,dpbssd:1000:1,none:1000:1,0.1040,0.0878,nan,682,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_20us,15,dpbssd:20000:1,none:20000:1,0.1098,0.0410,nan,5693,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_1ms,15,dpbssd:1000000:1,none:1000000:1,0.0566,0.1022,nan,5693,nan,nan
+phase12_artemisia_20261127-1734_p2,amx_20us_vs_300ns,15,dpbssd:20000:1,dpbssd:300:1,-0.0855,0.0730,nan,5693,nan,135
+phase12_artemisia_20261127-1734_p2,avx512_sat,15,fma512:0:8,none:0:1,0.3107,0.0844,nan,125,nan,nan
+phase12_artemisia_20261127-1951_p2b,null,15,none:0:1,none:0:1,-0.0113,0.0462,nan,nan,nan,nan
+phase12_artemisia_20261127-1951_p2b,avx256_sat,15,fma256:0:8,none:0:1,0.2057,0.0437,nan,94,nan,nan
+phase12_artemisia_20261127-1951_p2b,avx512_20us,15,fma512:20000:1,none:20000:1,0.2026,0.0368,nan,239,nan,nan
+phase12_artemisia_20261127-1951_p2b,amx_sat_n1,1,dpbssd:0:64,none:0:1,0.6137,0.9324,nan,135,nan,nan
+phase12_artemisia_20261127-1951_p2b,amx_sat_n4,4,dpbssd:0:64,none:0:1,0.4653,0.1626,nan,135,nan,nan
+phase12_artemisia_20261127-1951_p2b,amx_sat_n8,8,dpbssd:0:64,none:0:1,0.3455,0.1484,nan,135,nan,nan

@@ -126,3 +126,17 @@ Reading:
   background power (B ≈ 110 W now vs ~117 W), so **only compare within one
   run**. Within-run AMX saturated power is therefore ~0.1–0.35 W/core;
   report it as a range.
+
+## Analysis scripts + in-run latency (20:00-20:15)
+
+- `analysis/processing/power_vs_latency.py` -> `power_vs_latency.csv`,
+  `gating_summary.csv`, `figures/power_vs_latency.png`.
+- `analysis/processing/compute_fom.py` -> `fom.csv`. AMX (current data):
+  2 bits (4 levels), capacity 1.88 bits/probe, saving 0.086 +- 0.073 W/core
+  -> FoM ~22 bits/W (>= 12). AVX: no matched warm/gated power pair yet.
+- `bench/power_ab.c lat_out=` now times every op of burst-1 states inside
+  the power windows. **Smoke test (turbo ON, 20:11, preliminary):** AMX
+  every 20 us runs at **~636 ticks (shallow ~680 state), not 5.7k**; AVX-512
+  /256 every 20 us show **no penalty** (70 / 66 ticks, same as every 300 ns).
+  Periodic use keeps the units out of deep gating, so the "gated" power so far
+  is really the shallow state. Confirm turbo-off: `scripts/run_phase12.sh 10 p2c`.

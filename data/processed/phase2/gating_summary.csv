@@ -1,0 +1,4 @@
+unit,op,session,method,warm_cyc,gated_cyc,penalty_cyc,lat_src,saving_w,saving_ci
+AMX,dpbssd,phase12_artemisia_20261127-1734_p2,direct A=gated B=warm,135.0000,5693.0000,5558.0000,sweep,0.0855,0.0730
+AVX-512,fma512,,missing (needs fma512:20000:1 vs fma512:300:1; scripts/run_phase12.sh 10 p2c),,,,,,
+AVX-256,fma256,,missing (needs fma256:20000:1 vs fma256:300:1; scripts/run_phase12.sh 10 p2c),,,,,,

@@ -160,10 +160,10 @@ off-core hardware is available, the project still proceeds (AMX + AVX-512 only).
 - Record ambient controls: pinned freq, turbo off, core temp if available.
 
 ### Analysis
-- [ ] `power_vs_latency.py`: join Phase-1 latency states with Phase-2 power.
+- [x] `power_vs_latency.py`: join Phase-1 latency states with Phase-2 power (prefers in-run latency from power_ab lat_out=).
       Reproduce the small power delta (~3.6 W warm→cold) against the large
       latency delta.
-- [ ] `compute_fom.py`: compute the leakage-efficiency FoM
+- [x] `compute_fom.py`: compute the leakage-efficiency FoM (AMX done; AVX needs `scripts/run_phase12.sh 10 p2c`)
       `= distinguishable states (bits) / power saved (W)` per unit.
 
 **Exit criterion:** latency↔power table + FoM for AMX and AVX-512.

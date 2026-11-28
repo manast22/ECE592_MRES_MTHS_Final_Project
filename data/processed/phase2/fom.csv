@@ -1,0 +1,4 @@
+unit,op,n_levels,levels_bits,capacity_bits,penalty_cyc,saving_w_per_core,saving_ci95,fom_levels_bits_per_w,fom_capacity_bits_per_w,fom_levels_lower,fom_capacity_lower,note
+AMX,dpbssd,4,2.000,1.884,5558,0.0855,0.0730,23.39,22.03,12.62,11.88,"FoM range 12-151 bits/W (capacity)"
+AVX-512,fma512,4,2.000,1.209,nan,nan,nan,nan,nan,nan,nan,"power saving not measured yet: missing (needs fma512:20000:1 vs fma512:300:1; scripts/run_phase12.sh 10 p2c)"
+AVX-256,fma256,3,1.585,1.136,nan,nan,nan,nan,nan,nan,nan,"power saving not measured yet: missing (needs fma256:20000:1 vs fma256:300:1; scripts/run_phase12.sh 10 p2c)"

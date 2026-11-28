@@ -25,6 +25,7 @@
 //   skip=4 (whole blocks)  seed=time  main=10 (CPU for the RAPL reader)
 //   pkg=auto (from first cpu)
 //   label=   free text copied into the CSV     header=0|1
+//   lat_out= CSV to append in-run op latency to (burst=1 states only; see below)
 // CSV (one row per window):
 //   label,n_cores,a,b,win,state,dt_s,pkg_w,dram_w,t_ns   (t_ns = wall clock at window start)
 // stderr: mean A, mean B, paired diff A-B with 95% CI, per-core diff.
@@ -77,7 +78,16 @@ static uint64_t T0, WT, NW;              // schedule start, window ticks, window
 static volatile uint64_t g_ops[2];      // ops completed in A / B (all workers)
 static volatile int g_ready;
 
-typedef struct { int cpu; } warg_t;
+// In-run latency (lat_out=): for burst=1 states with a real op, every op is
+// timed (LFENCE;RDTSC;op;LFENCE;RDTSC, TSC ticks = core cycles with turbo off,
+// ~50 tick overhead) into a per-worker ring of the last LRING samples per
+// state. Tells which latency state the unit is actually in during the power
+// windows (dense usage changes the AMX policy, slot 3), so power and latency
+// come from the same run. Saturated states (burst>1) are not timed: the fences
+// would change the workload.
+#define LRING 4096
+typedef struct { int cpu; uint64_t lat[2][LRING]; uint64_t nlat[2]; } warg_t;
+static inline int timed(const state_t *s) { return s->burst == 1 && s->op != OP_NONE; }
 static void *worker(void *p) {
     warg_t *w = p;
     pin_cpu(w->cpu);
@@ -92,7 +102,13 @@ static void *worker(void *p) {
         int a = is_a((t - t0) / WT);
         const state_t *s = a ? &SA : &SB;
         while (__rdtsc() - t < s->n) ;
-        for (int i = 0; i < s->burst; i++) do_op(s->op);
+        if (timed(s)) {
+            _mm_lfence(); uint64_t q0 = __rdtsc(); _mm_lfence();
+            do_op(s->op);
+            _mm_lfence(); uint64_t q1 = __rdtsc();
+            w->lat[!a][w->nlat[!a]++ % LRING] = q1 - q0;
+        } else
+            for (int i = 0; i < s->burst; i++) do_op(s->op);
         ops[!a] += s->burst;
     }
     __atomic_add_fetch(&g_ops[0], ops[0], __ATOMIC_SEQ_CST);
@@ -170,7 +186,7 @@ int main(int argc, char **argv) {
     }
     T0 = UINT64_MAX;
 
-    pthread_t th[256]; warg_t wa[256];
+    pthread_t th[256]; warg_t *wa = calloc(nc, sizeof *wa);
     for (int i = 0; i < nc; i++) { wa[i].cpu = cpus[i]; pthread_create(&th[i], NULL, worker, &wa[i]); }
     while (__atomic_load_n(&g_ready, __ATOMIC_SEQ_CST) < nc) usleep(1000);
     uint64_t t0 = __rdtsc() + (uint64_t)(0.05 * mhz * 1e6);   // start 50 ms from now
@@ -215,5 +231,36 @@ int main(int argc, char **argv) {
             label, nc, seed, SA.name, SB.name, na ? sa / na : 0, nb ? sb / nb : 0, m, ci, nbk, m / nc,
             g_ops[0] / secs_a / nc, g_ops[1] / secs_b / nc);
     fflush(stdout);
+
+    // in-run latency per state: pooled over workers, percentiles + raw ring dump
+    const char *lout = kv(argc, argv, "lat_out", "");
+    if (lout[0]) {
+        FILE *lf = fopen(lout, "a"); if (!lf) { perror(lout); return 1; }
+        fseek(lf, 0, SEEK_END);
+        if (ftell(lf) == 0) fprintf(lf, "label,state,spec,n,p10,p50,p90,frac_lt300,frac_300_1500,frac_1500_4000,frac_4000_6500,frac_6500_8500,frac_ge8500\n");
+        for (int k = 0; k < 2; k++) {
+            const state_t *s = k ? &SB : &SA;
+            if (!timed(s)) continue;
+            uint64_t *v = malloc(sizeof(uint64_t) * LRING * nc); size_t m = 0;
+            for (int i = 0; i < nc; i++) {
+                uint64_t c = wa[i].nlat[k] < LRING ? wa[i].nlat[k] : LRING;
+                memcpy(v + m, wa[i].lat[k], c * sizeof *v); m += c;
+            }
+            if (!m) { free(v); continue; }
+            qsort(v, m, sizeof *v, cmp_u64);
+            // bins bracket the slot-1..3 levels: ~135 | ~700 | 3.3k | 5.7k | 7.7k | 9.4k+
+            static const uint64_t edge[] = {300, 1500, 4000, 6500, 8500};
+            size_t bin[6] = {0};
+            for (size_t j = 0; j < m; j++) { int b = 0; while (b < 5 && v[j] >= edge[b]) b++; bin[b]++; }
+            fprintf(lf, "%s,%c,%s,%zu,%lu,%lu,%lu", label, k ? 'B' : 'A', s->name, m,
+                    v[m / 10], v[m / 2], v[m * 9 / 10]);
+            for (int b = 0; b < 6; b++) fprintf(lf, ",%.4f", (double)bin[b] / m);
+            fprintf(lf, "\n");
+            fprintf(stderr, "  lat %s %c %s: n=%zu p10/p50/p90 = %lu/%lu/%lu ticks\n", label, k ? 'B' : 'A', s->name, m,
+                    v[m / 10], v[m / 2], v[m * 9 / 10]);
+            free(v);
+        }
+        fclose(lf);
+    }
     return 0;
 }
