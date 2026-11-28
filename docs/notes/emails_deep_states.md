@@ -50,6 +50,7 @@ I also ruled out the following:
 - **No settings change between sessions.** The server was not rebooted, and tuned is inactive (its profile is unchanged since boot).
 - **Not the uncore frequency.** The uncore is pinned at 2.2 GHz.
 - **Not other load on the socket.** Package power was the same in session 1 and session 2 (median 102.6 vs. 102.5 W).
+- **Not the EPB setting.** Changing EPB from 6 to 15 (power-saving) left every latency level unchanged within 0.5 % (turbo on).
 - **Not the timer tick.** In session 1 the share of 9.4k samples jumps from 2 % to 45 % at 100 µs and levels off around 80–85 %. If it were caused by the 1 kHz tick, the share would rise in proportion to idle time and reach 100 % at 1 ms.
 
 **Questions:**
